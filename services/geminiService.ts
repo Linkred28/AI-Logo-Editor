@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 
 const API_KEY = process.env.API_KEY;
@@ -44,7 +43,36 @@ export const editImageWithGemini = async (
       },
     });
 
-    for (const part of response.candidates[0].content.parts) {
+    // 1. Check for immediate blocking at the response level
+    if (response.promptFeedback?.blockReason) {
+      throw new Error(`Request was blocked due to: ${response.promptFeedback.blockReason}. Please adjust your prompt.`);
+    }
+
+    // 2. Check if there are any candidates
+    const candidate = response.candidates?.[0];
+    if (!candidate) {
+      throw new Error("No image content was generated. The API response was empty.");
+    }
+
+    // 3. Check the reason the candidate finished
+    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+        const reasonMap: {[key: string]: string} = {
+            'SAFETY': 'The request was blocked due to safety concerns. Please modify your prompt or image.',
+            'RECITATION': 'The response was blocked due to potential recitation of copyrighted material.',
+            'NO_IMAGE': 'The model could not generate an image from your prompt. Please try rephrasing your request to be more specific about the visual changes.',
+            'OTHER': 'Generation failed for an unspecified reason from the model.'
+        };
+        const errorMessage = reasonMap[candidate.finishReason] || `Generation stopped unexpectedly: ${candidate.finishReason}`;
+        throw new Error(errorMessage);
+    }
+    
+    // 4. Check if the candidate has the expected content structure
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      throw new Error("The API response did not contain the expected image format. Please try again.");
+    }
+
+    // 5. Find and return the image data
+    for (const part of candidate.content.parts) {
       if (part.inlineData) {
         // Reconstruct the data URI for display in the browser.
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;

@@ -20,6 +20,12 @@ const DownloadIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
+const RefreshIcon: React.FC<{className?: string}> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0 8.25 8.25 0 0 0 0-11.667l-3.182-3.182m0 0-3.182 3.182m7.156 0-3.182-3.182" />
+    </svg>
+);
+
 const LoadingSpinner: React.FC = () => (
   <div className="flex flex-col items-center justify-center space-y-4">
     <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-teal-400"></div>
@@ -27,10 +33,19 @@ const LoadingSpinner: React.FC = () => (
   </div>
 );
 
+const promptSuggestions = [
+  'Make it more modern',
+  'Add a circular frame',
+  'Change color to blue',
+  'Use a minimalist style',
+  'Convert to a flat design',
+  'Make the text bolder',
+];
+
 const App: React.FC = () => {
   const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
   const [originalImagePreview, setOriginalImagePreview] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<string>('Cambia el texto "METODIKO" a "M", conservando el mismo estilo, fuente y color.');
+  const [prompt, setPrompt] = useState<string>('');
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +77,7 @@ const App: React.FC = () => {
     setGeneratedImage(null);
 
     try {
-      const qualityEnhancementPrompt = 'El resultado debe ser un logotipo de alta resolución y calidad profesional con líneas limpias y nítidas, sin pixelación ni artefactos. La imagen final debe parecer un gráfico nítido de estilo vectorial.';
+      const qualityEnhancementPrompt = 'Ensure the output is a professional, clean, and high-quality logo.';
       const fullPrompt = `${prompt}. ${qualityEnhancementPrompt}`;
 
       const newImageBase64 = await editImageWithGemini(
@@ -93,6 +108,23 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   }, [generatedImage]);
 
+  const handleReset = useCallback(() => {
+    setOriginalImageFile(null);
+    setOriginalImagePreview(null);
+    setPrompt('');
+    setGeneratedImage(null);
+    setIsLoading(false);
+    setError(null);
+    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  }, []);
+
+  const handleSuggestionClick = useCallback((suggestion: string) => {
+    setPrompt(prev => prev ? `${prev}. ${suggestion}` : suggestion);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 p-4 sm:p-6 lg:p-8">
       <header className="text-center mb-10">
@@ -108,6 +140,7 @@ const App: React.FC = () => {
           <div>
             <label className="text-lg font-semibold text-gray-300 mb-2 block">1. Upload Original Logo</label>
             <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-600 px-6 py-10 hover:border-teal-400 transition-colors">
+              <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
               {!originalImagePreview ? (
                 <div className="text-center">
                   <UploadIcon className="mx-auto h-12 w-12 text-gray-500" />
@@ -117,7 +150,6 @@ const App: React.FC = () => {
                       className="relative cursor-pointer rounded-md font-semibold text-teal-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 hover:text-teal-300"
                     >
                       <span>Upload a file</span>
-                      <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
@@ -128,7 +160,6 @@ const App: React.FC = () => {
                     <img src={originalImagePreview} alt="Original logo preview" className="max-h-60 rounded-md" />
                      <label htmlFor="file-upload" className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                         Change Image
-                        <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
                     </label>
                 </div>
               )}
@@ -143,8 +174,22 @@ const App: React.FC = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-teal-500 sm:text-sm sm:leading-6 transition"
-              placeholder="e.g., Change the text to 'NewName'"
+              placeholder="e.g., Change the text to 'NewName', make the background blue..."
             />
+            <div className="mt-4">
+                <h3 className="text-sm font-medium text-gray-400 mb-2">Need inspiration? Try one of these:</h3>
+                <div className="flex flex-wrap gap-2">
+                    {promptSuggestions.map((suggestion) => (
+                        <button
+                            key={suggestion}
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-700/80 rounded-full hover:bg-teal-600 hover:text-white transition-all duration-200"
+                        >
+                            {suggestion}
+                        </button>
+                    ))}
+                </div>
+            </div>
           </div>
 
           <div className="pt-4">
@@ -165,20 +210,38 @@ const App: React.FC = () => {
                 {isLoading ? (
                     <LoadingSpinner />
                 ) : error ? (
-                    <div className="text-center text-red-400">
-                        <p className="font-semibold">Generation Failed</p>
-                        <p className="text-sm mt-1">{error}</p>
+                    <div className="text-center text-red-400 space-y-4">
+                        <div>
+                            <p className="font-semibold">Generation Failed</p>
+                            <p className="text-sm mt-1">{error}</p>
+                        </div>
+                        <button
+                          onClick={handleReset}
+                          className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 transition-all"
+                        >
+                          <RefreshIcon className="h-5 w-5" />
+                          Start Over
+                        </button>
                     </div>
                 ) : generatedImage ? (
                     <div className="text-center space-y-4">
                         <img src={generatedImage} alt="Generated logo" className="max-h-[24rem] rounded-md object-contain" />
-                        <button
-                          onClick={handleDownload}
-                          className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600 transition-all duration-300"
-                        >
-                          <DownloadIcon className="h-5 w-5" />
-                          Download as PNG
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                            <button
+                              onClick={handleDownload}
+                              className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600 transition-all duration-300"
+                            >
+                              <DownloadIcon className="h-5 w-5" />
+                              Download as PNG
+                            </button>
+                             <button
+                              onClick={handleReset}
+                              className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 transition-all"
+                            >
+                              <RefreshIcon className="h-5 w-5" />
+                              Start Over
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div className="text-center space-y-4">
