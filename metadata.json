@@ -1,0 +1,5 @@
+{
+  "name": "AI Logo Editor",
+  "description": "Upload an image of a logo, provide a text prompt describing the desired changes, and let AI generate the new version. This app uses Gemini to perform image editing based on your instructions.",
+  "requestFramePermissions": []
+}
