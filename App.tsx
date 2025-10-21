@@ -1,6 +1,8 @@
 import React, { useState, useCallback, ChangeEvent } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
-import { editImageWithGemini } from './services/geminiService';
+import { editImageWithGemini, createImageWithGemini } from './services/geminiService';
+
+type Mode = 'create' | 'edit';
 
 const UploadIcon: React.FC<{className?: string}> = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -34,21 +36,43 @@ const LoadingSpinner: React.FC = () => (
 );
 
 const promptSuggestions = [
-  'Make it more modern',
+  'A minimalist fox logo',
+  'Letter "A" as a mountain peak',
+  'Modern style, vibrant colors',
   'Add a circular frame',
   'Change color to blue',
-  'Use a minimalist style',
-  'Convert to a flat design',
+  'Use a geometric style',
   'Make the text bolder',
 ];
 
 const App: React.FC = () => {
+  const [activeMode, setActiveMode] = useState<Mode>('create');
   const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
   const [originalImagePreview, setOriginalImagePreview] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<string>('');
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleReset = useCallback(() => {
+    setOriginalImageFile(null);
+    setOriginalImagePreview(null);
+    setPrompt('');
+    setGeneratedImage(null);
+    setIsLoading(false);
+    setError(null);
+    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  }, []);
+
+  const handleModeChange = useCallback((mode: Mode) => {
+    if (mode !== activeMode) {
+      setActiveMode(mode);
+      handleReset();
+    }
+  }, [activeMode, handleReset]);
 
   const handleImageUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -67,8 +91,12 @@ const App: React.FC = () => {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!originalImageFile || !originalImagePreview || !prompt) {
-      setError("Please upload an image and provide a prompt.");
+    if (!prompt) {
+        setError("Please provide a prompt.");
+        return;
+    }
+     if (activeMode === 'edit' && (!originalImageFile || !originalImagePreview)) {
+      setError("Please upload an image to edit.");
       return;
     }
 
@@ -78,13 +106,20 @@ const App: React.FC = () => {
 
     try {
       const qualityEnhancementPrompt = 'Ensure the output is a professional, clean, and high-quality logo.';
-      const fullPrompt = `${prompt}. ${qualityEnhancementPrompt}`;
+      const fullPrompt = `A logo of: ${prompt}. ${qualityEnhancementPrompt}`;
+      
+      let newImageBase64: string;
 
-      const newImageBase64 = await editImageWithGemini(
-        originalImagePreview,
-        originalImageFile.type,
-        fullPrompt
-      );
+      if (activeMode === 'create') {
+        newImageBase64 = await createImageWithGemini(fullPrompt);
+      } else {
+         newImageBase64 = await editImageWithGemini(
+            originalImagePreview!,
+            originalImageFile!.type,
+            fullPrompt
+        );
+      }
+      
       setGeneratedImage(newImageBase64);
     } catch (err) {
       if (err instanceof Error) {
@@ -95,11 +130,10 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [originalImageFile, originalImagePreview, prompt]);
+  }, [activeMode, originalImageFile, originalImagePreview, prompt]);
 
   const handleDownload = useCallback(() => {
     if (!generatedImage) return;
-
     const link = document.createElement('a');
     link.href = generatedImage;
     link.download = 'generated-logo.png';
@@ -108,22 +142,11 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   }, [generatedImage]);
 
-  const handleReset = useCallback(() => {
-    setOriginalImageFile(null);
-    setOriginalImagePreview(null);
-    setPrompt('');
-    setGeneratedImage(null);
-    setIsLoading(false);
-    setError(null);
-    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.value = '';
-    }
-  }, []);
-
   const handleSuggestionClick = useCallback((suggestion: string) => {
     setPrompt(prev => prev ? `${prev}. ${suggestion}` : suggestion);
   }, []);
+
+  const isSubmitDisabled = isLoading || !prompt || (activeMode === 'edit' && !originalImageFile);
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 p-4 sm:p-6 lg:p-8">
@@ -131,50 +154,69 @@ const App: React.FC = () => {
         <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-cyan-500">
           AI Logo Editor
         </h1>
-        <p className="mt-2 text-lg text-gray-400">Transform your logo with a simple text instruction.</p>
+        <p className="mt-2 text-lg text-gray-400">Create a new logo from scratch or edit an existing one.</p>
       </header>
 
       <main className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Input Panel */}
         <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex flex-col space-y-6">
-          <div>
-            <label className="text-lg font-semibold text-gray-300 mb-2 block">1. Upload Original Logo</label>
-            <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-600 px-6 py-10 hover:border-teal-400 transition-colors">
-              <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
-              {!originalImagePreview ? (
-                <div className="text-center">
-                  <UploadIcon className="mx-auto h-12 w-12 text-gray-500" />
-                  <div className="mt-4 flex text-sm leading-6 text-gray-400">
-                    <label
-                      htmlFor="file-upload"
-                      className="relative cursor-pointer rounded-md font-semibold text-teal-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 hover:text-teal-300"
-                    >
-                      <span>Upload a file</span>
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs leading-5 text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                </div>
-              ) : (
-                 <div className="relative group">
-                    <img src={originalImagePreview} alt="Original logo preview" className="max-h-60 rounded-md" />
-                     <label htmlFor="file-upload" className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                        Change Image
-                    </label>
-                </div>
-              )}
+            <div className="flex border-b border-gray-700">
+                <button 
+                    onClick={() => handleModeChange('create')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'create' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Create Logo
+                </button>
+                 <button 
+                    onClick={() => handleModeChange('edit')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'edit' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                    Edit Logo
+                </button>
             </div>
-          </div>
+
+          {activeMode === 'edit' && (
+             <div>
+                <label className="text-lg font-semibold text-gray-300 mb-2 block">1. Upload Original Logo</label>
+                <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-600 px-6 py-10 hover:border-teal-400 transition-colors">
+                <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
+                {!originalImagePreview ? (
+                    <div className="text-center">
+                    <UploadIcon className="mx-auto h-12 w-12 text-gray-500" />
+                    <div className="mt-4 flex text-sm leading-6 text-gray-400">
+                        <label
+                        htmlFor="file-upload"
+                        className="relative cursor-pointer rounded-md font-semibold text-teal-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 hover:text-teal-300"
+                        >
+                        <span>Upload a file</span>
+                        </label>
+                        <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-xs leading-5 text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                    </div>
+                ) : (
+                    <div className="relative group">
+                        <img src={originalImagePreview} alt="Original logo preview" className="max-h-60 rounded-md" />
+                        <label htmlFor="file-upload" className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                            Change Image
+                        </label>
+                    </div>
+                )}
+                </div>
+            </div>
+          )}
 
           <div>
-            <label htmlFor="prompt" className="text-lg font-semibold text-gray-300 mb-2 block">2. Describe Your Edit</label>
+            <label htmlFor="prompt" className="text-lg font-semibold text-gray-300 mb-2 block">
+                {activeMode === 'edit' ? '2. Describe Your Edit' : '1. Describe Your Logo'}
+            </label>
             <textarea
               id="prompt"
               rows={4}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-teal-500 sm:text-sm sm:leading-6 transition"
-              placeholder="e.g., Change the text to 'NewName', make the background blue..."
+              placeholder={activeMode === 'edit' ? "e.g., Change the text to 'NewName', make the background blue..." : "e.g., A minimalist logo for a coffee shop called 'The Daily Grind'..."}
             />
             <div className="mt-4">
                 <h3 className="text-sm font-medium text-gray-400 mb-2">Need inspiration? Try one of these:</h3>
@@ -195,10 +237,10 @@ const App: React.FC = () => {
           <div className="pt-4">
              <button
               onClick={handleSubmit}
-              disabled={isLoading || !originalImageFile}
+              disabled={isSubmitDisabled}
               className="w-full flex items-center justify-center gap-2 rounded-md bg-teal-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 disabled:scale-100"
             >
-              {isLoading ? 'Generating...' : 'Generate New Logo'}
+              {isLoading ? 'Generating...' : (activeMode === 'edit' ? 'Generate New Version' : 'Create New Logo')}
               <SparklesIcon className="h-5 w-5" />
             </button>
           </div>
@@ -247,7 +289,7 @@ const App: React.FC = () => {
                     <div className="text-center space-y-4">
                       <div className="text-gray-500">
                         <h3 className="text-lg font-medium">Your new logo will appear here</h3>
-                        <p className="mt-1 text-sm">Upload a logo and describe your edit to get started.</p>
+                        <p className="mt-1 text-sm">Describe your logo or upload one to get started.</p>
                       </div>
                       <button
                         disabled

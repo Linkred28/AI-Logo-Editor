@@ -10,39 +10,7 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
-export const editImageWithGemini = async (
-  base64ImageData: string,
-  mimeType: string,
-  prompt: string
-): Promise<string> => {
-  try {
-    // The base64 string from FileReader includes the data URI prefix (e.g., "data:image/png;base64,"),
-    // which needs to be removed before sending to the Gemini API.
-    const pureBase64 = base64ImageData.split(',')[1];
-    if (!pureBase64) {
-        throw new Error("Invalid base64 image data provided.");
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: pureBase64,
-              mimeType: mimeType,
-            },
-          },
-          {
-            text: prompt,
-          },
-        ],
-      },
-      config: {
-        responseModalities: [Modality.IMAGE],
-      },
-    });
-
+const handleGeminiResponse = (response: any): string => {
     // 1. Check for immediate blocking at the response level
     if (response.promptFeedback?.blockReason) {
       throw new Error(`Request was blocked due to: ${response.promptFeedback.blockReason}. Please adjust your prompt.`);
@@ -80,9 +48,71 @@ export const editImageWithGemini = async (
     }
 
     throw new Error("No image data found in the API response.");
+};
+
+export const editImageWithGemini = async (
+  base64ImageData: string,
+  mimeType: string,
+  prompt: string
+): Promise<string> => {
+  try {
+    const pureBase64 = base64ImageData.split(',')[1];
+    if (!pureBase64) {
+        throw new Error("Invalid base64 image data provided.");
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: pureBase64,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+      config: {
+        responseModalities: [Modality.IMAGE],
+      },
+    });
+
+    return handleGeminiResponse(response);
 
   } catch (error) {
     console.error("Error editing image with Gemini:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to generate image: ${error.message}`);
+    }
+    throw new Error("An unknown error occurred while generating the image.");
+  }
+};
+
+
+export const createImageWithGemini = async (prompt: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            text: prompt,
+          },
+        ],
+      },
+      config: {
+        responseModalities: [Modality.IMAGE],
+      },
+    });
+
+    return handleGeminiResponse(response);
+
+  } catch (error) {
+    console.error("Error creating image with Gemini:", error);
     if (error instanceof Error) {
         throw new Error(`Failed to generate image: ${error.message}`);
     }
