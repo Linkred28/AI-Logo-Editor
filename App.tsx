@@ -1,72 +1,101 @@
-import React, { useState, useCallback, ChangeEvent } from 'react';
+import React, { useState, useCallback, ChangeEvent, KeyboardEvent, useRef, useEffect } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
-import { editImageWithGemini, createImageWithGemini } from './services/geminiService';
+import { 
+    editImageWithGemini, 
+    createImageWithGemini, 
+    getInitialBrandKit,
+    generateMockup,
+    generateLogoVariation,
+    generateSocialPost,
+    generateBrandGuidelines
+} from './services/geminiService';
 
 type Mode = 'create' | 'edit';
+type BrandKit = {
+  colors: { hex: string }[];
+  typography: { headingFont: string; bodyFont: string };
+};
+type Status = 'idle' | 'loading' | 'error' | 'success';
 
-const UploadIcon: React.FC<{className?: string}> = ({ className }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-  </svg>
-);
+// --- ICONS ---
+const UploadIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg> );
+const SparklesIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" /></svg> );
+const DownloadIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg> );
+const RefreshIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0 8.25 8.25 0 0 0 0-11.667l-3.182-3.182m0 0-3.182 3.182m7.156 0-3.182-3.182" /></svg> );
+const WandIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 0 0-2.12-2.122L6.12 13.65a3 3 0 0 0-2.122 2.122L3.65 16.12a3 3 0 0 0 2.122 2.122L6.12 18.57a3 3 0 0 0 2.12-2.122L9.53 16.122ZM18.88 9.53a3 3 0 0 0-2.122-2.122L16.12 6.12a3 3 0 0 0-2.122 2.122L13.65 9.53a3 3 0 0 0 2.122 2.122L16.12 12.12a3 3 0 0 0 2.12-2.122L18.88 9.53Z" /><path strokeLinecap="round" strokeLinejoin="round" d="m12.12 6.12 2.247-2.247a3 3 0 0 0-4.242-4.242L6.12 3.65a3 3 0 0 0-2.122 2.122L3.65 6.12a3 3 0 0 0 2.122 2.122L6.12 8.487m6-2.367.003.002.002.002.002.002.003.002.002.002.002.003.002.002.002.003.002.002.003.002.002.002.003.002.002.003.002.002.002.003.002.002Z" /></svg> );
+const SendIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg> );
+const CheckIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> );
+const XIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg> );
 
-const SparklesIcon: React.FC<{className?: string}> = ({ className }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
-  </svg>
-);
 
-const DownloadIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-);
-
-const RefreshIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0 8.25 8.25 0 0 0 0-11.667l-3.182-3.182m0 0-3.182 3.182m7.156 0-3.182-3.182" />
-    </svg>
-);
-
-const LoadingSpinner: React.FC = () => (
+// --- LOADING SPINNERS ---
+const LoadingSpinner: React.FC<{text: string}> = ({ text }) => (
   <div className="flex flex-col items-center justify-center space-y-4">
     <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-teal-400"></div>
-    <p className="text-teal-300">Generating your new logo...</p>
+    <p className="text-teal-300">{text}</p>
   </div>
 );
 
-const promptSuggestions = [
-  'A minimalist fox logo',
-  'Letter "A" as a mountain peak',
-  'Modern style, vibrant colors',
-  'Add a circular frame',
-  'Change color to blue',
-  'Use a geometric style',
-  'Make the text bolder',
+// --- DATA ---
+const DESIGNER_PERSONAS = [
+    { name: 'Swiss Master', value: 'a minimalist, geometric, clean style using sans-serif typography, embodying Swiss design principles.' },
+    { name: 'Vintage Artisan', value: 'a style with textures, stamps, and seals, using serif and script typography for a vintage, handcrafted feel.' },
+    { name: 'Tech Innovator', value: 'a futuristic, abstract style with gradients and modern aesthetics.' },
+    { name: 'Playful Illustrator', value: 'a fun, friendly, hand-drawn style, possibly featuring a character or mascot.' },
 ];
+const MOCKUP_TYPES = ['Business Card', 'Coffee Cup', 'T-Shirt', 'Storefront Sign', 'Social Media Profile'];
 
 const App: React.FC = () => {
   const [activeMode, setActiveMode] = useState<Mode>('create');
-  const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
-  const [originalImagePreview, setOriginalImagePreview] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<string>('');
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
+  
+  // Universal State
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState<string>('');
+  
+  // Create Mode State
+  const [brandName, setBrandName] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [vision, setVision] = useState('');
+  const [designerPersona, setDesignerPersona] = useState('');
+  const [inspirationFiles, setInspirationFiles] = useState<File[]>([]);
+  const [inspirationPreviews, setInspirationPreviews] = useState<string[]>([]);
+  
+  // Edit Mode State
+  const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
+  const [editHistory, setEditHistory] = useState<{user: string, image: string}[]>([]);
+  
+  // Brand Kit State
+  const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
+  const [generatedMockups, setGeneratedMockups] = useState<Record<string, {status: Status, url?: string}>>({});
+  const [socialPost, setSocialPost] = useState<{status: Status, image?: string, caption?: string} | null>(null);
+  const [brandGuidelines, setBrandGuidelines] = useState<{status: Status, dos?: string[], donts?: string[]} | null>(null);
+  const [logoVariations, setLogoVariations] = useState<Record<string, {status: Status, url?: string}>>({});
+
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [editHistory]);
 
   const handleReset = useCallback(() => {
-    setOriginalImageFile(null);
-    setOriginalImagePreview(null);
-    setPrompt('');
-    setGeneratedImage(null);
-    setIsLoading(false);
+    setStatus('idle');
     setError(null);
-    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.value = '';
-    }
+    setGeneratedImage(null);
+    setPrompt('');
+    setBrandName('');
+    setIndustry('');
+    setVision('');
+    setDesignerPersona('');
+    setInspirationFiles([]);
+    setInspirationPreviews([]);
+    setOriginalImageFile(null);
+    setEditHistory([]);
+    setBrandKit(null);
+    setGeneratedMockups({});
+    setSocialPost(null);
+    setBrandGuidelines(null);
+    setLogoVariations({});
   }, []);
-
+  
   const handleModeChange = useCallback((mode: Mode) => {
     if (mode !== activeMode) {
       setActiveMode(mode);
@@ -74,233 +103,302 @@ const App: React.FC = () => {
     }
   }, [activeMode, handleReset]);
 
+  const handleInspirationUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+        const fileList = Array.from(files).slice(0, 3); // Limit to 3 files
+        setInspirationFiles(fileList);
+        const previews = await Promise.all(fileList.map(file => fileToBase64(file)));
+        setInspirationPreviews(previews);
+    }
+  }, []);
+
   const handleImageUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      handleReset();
+      setActiveMode('edit');
       setOriginalImageFile(file);
-      setGeneratedImage(null);
-      setError(null);
       try {
         const base64Preview = await fileToBase64(file);
-        setOriginalImagePreview(base64Preview);
+        setGeneratedImage(base64Preview);
       } catch (err) {
         setError('Failed to read the image file.');
-        setOriginalImagePreview(null);
+        setStatus('error');
       }
     }
-  }, []);
+  }, [handleReset]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!prompt) {
-        setError("Please provide a prompt.");
-        return;
-    }
-     if (activeMode === 'edit' && (!originalImageFile || !originalImagePreview)) {
-      setError("Please upload an image to edit.");
-      return;
-    }
-
-    setIsLoading(true);
+  const handleGuidedSubmit = useCallback(async () => {
+    let fullPrompt = `A professional, high-quality logo for a brand named '${brandName}' in the ${industry} industry.`;
+    if (vision) fullPrompt += ` The brand's vision is: "${vision}".`;
+    if (designerPersona) fullPrompt += ` The desired style is ${designerPersona}`;
+    if (inspirationPreviews.length > 0) fullPrompt += ` Draw inspiration from the provided images for mood, color, and style.`;
+    
+    setStatus('loading');
     setError(null);
     setGeneratedImage(null);
-
+    setBrandKit(null);
+    
     try {
-      const qualityEnhancementPrompt = 'Ensure the output is a professional, clean, and high-quality logo.';
-      const fullPrompt = `A logo of: ${prompt}. ${qualityEnhancementPrompt}`;
-      
-      let newImageBase64: string;
+      const imageAssets = await Promise.all(inspirationFiles.map(async (file) => ({
+        base64: await fileToBase64(file),
+        mimeType: file.type
+      })));
 
-      if (activeMode === 'create') {
-        newImageBase64 = await createImageWithGemini(fullPrompt);
-      } else {
-         newImageBase64 = await editImageWithGemini(
-            originalImagePreview!,
-            originalImageFile!.type,
-            fullPrompt
-        );
-      }
-      
+      const newImageBase64 = await createImageWithGemini(fullPrompt, imageAssets);
       setGeneratedImage(newImageBase64);
+      setStatus('success');
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred.");
-      }
-    } finally {
-      setIsLoading(false);
+      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+      setStatus('error');
     }
-  }, [activeMode, originalImageFile, originalImagePreview, prompt]);
+  }, [brandName, industry, vision, designerPersona, inspirationFiles]);
 
-  const handleDownload = useCallback(() => {
+  const handleEditSubmit = useCallback(async () => {
+    if (!prompt || !generatedImage || !originalImageFile) return;
+    const currentPrompt = prompt;
+    setPrompt('');
+    setStatus('loading');
+    setError(null);
+    try {
+        const newImageBase64 = await editImageWithGemini( generatedImage, originalImageFile.type, `${currentPrompt}. Ensure the output is a professional, clean, high-quality logo.` );
+        setGeneratedImage(newImageBase64);
+        setEditHistory(prev => [...prev, { user: currentPrompt, image: newImageBase64 }]);
+        setStatus('success');
+    } catch (err) {
+        setError(err instanceof Error ? err.message : "An unknown error occurred.");
+        setStatus('error');
+    }
+}, [prompt, generatedImage, originalImageFile]);
+
+  const handleGenerateInitialBrandKit = useCallback(async () => {
     if (!generatedImage) return;
+    setStatus('loading');
+    setError(null);
+    try {
+        const kit = await getInitialBrandKit(generatedImage);
+        setBrandKit(kit);
+        setStatus('success');
+    } catch (err) {
+        setError(err instanceof Error ? err.message : "An unknown error occurred during brand kit generation.");
+        setStatus('error');
+    }
+  }, [generatedImage]);
+
+  const handleGenerateMockup = async (mockupType: string) => {
+    if (!generatedImage) return;
+    setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'loading' } }));
+    try {
+        const url = await generateMockup(generatedImage, mockupType);
+        setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'success', url } }));
+    } catch (e) {
+        setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'error' } }));
+    }
+  };
+
+  const handleGenerateLogoVariation = async (variation: 'white' | 'profile_picture') => {
+    if (!generatedImage) return;
+    setLogoVariations(prev => ({ ...prev, [variation]: { status: 'loading' } }));
+    try {
+        const url = await generateLogoVariation(generatedImage, variation);
+        setLogoVariations(prev => ({ ...prev, [variation]: { status: 'success', url } }));
+    } catch (e) {
+        setLogoVariations(prev => ({ ...prev, [variation]: { status: 'error' } }));
+    }
+  }
+
+  const handleGenerateSocialPost = async () => {
+    if (!generatedImage) return;
+    setSocialPost({ status: 'loading' });
+    try {
+        const post = await generateSocialPost(generatedImage, brandName, vision);
+        setSocialPost({ status: 'success', ...post });
+    } catch (e) {
+        setSocialPost({ status: 'error' });
+    }
+  }
+  
+  const handleGenerateGuidelines = async () => {
+    if (!generatedImage) return;
+    setBrandGuidelines({ status: 'loading' });
+    try {
+        const guidelines = await generateBrandGuidelines(generatedImage);
+        setBrandGuidelines({ status: 'success', ...guidelines });
+    } catch (e) {
+        setBrandGuidelines({ status: 'error' });
+    }
+  }
+
+  const downloadImage = (url: string, filename: string) => {
     const link = document.createElement('a');
-    link.href = generatedImage;
-    link.download = 'generated-logo.png';
+    link.href = url;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, [generatedImage]);
-
-  const handleSuggestionClick = useCallback((suggestion: string) => {
-    setPrompt(prev => prev ? `${prev}. ${suggestion}` : suggestion);
-  }, []);
-
-  const isSubmitDisabled = isLoading || !prompt || (activeMode === 'edit' && !originalImageFile);
-
+  };
+  
+  const isCreateDisabled = status === 'loading' || !brandName || !industry || !designerPersona;
+  
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 p-4 sm:p-6 lg:p-8">
       <header className="text-center mb-10">
         <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-cyan-500">
-          AI Logo Editor
+          AI Brand Co-pilot
         </h1>
-        <p className="mt-2 text-lg text-gray-400">Create a new logo from scratch or edit an existing one.</p>
+        <p className="mt-2 text-lg text-gray-400">Your partner in crafting a unique brand identity from vision to reality.</p>
       </header>
 
       <main className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Input Panel */}
+        {/* --- INPUT PANEL --- */}
         <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex flex-col space-y-6">
             <div className="flex border-b border-gray-700">
-                <button 
-                    onClick={() => handleModeChange('create')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'create' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}
-                >
-                    Create Logo
-                </button>
-                 <button 
-                    onClick={() => handleModeChange('edit')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'edit' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}
-                >
-                    Edit Logo
-                </button>
+                <button onClick={() => handleModeChange('create')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'create' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Create</button>
+                <button onClick={() => handleModeChange('edit')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'edit' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Edit</button>
             </div>
 
-          {activeMode === 'edit' && (
-             <div>
-                <label className="text-lg font-semibold text-gray-300 mb-2 block">1. Upload Original Logo</label>
-                <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-600 px-6 py-10 hover:border-teal-400 transition-colors">
-                <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
-                {!originalImagePreview ? (
-                    <div className="text-center">
-                    <UploadIcon className="mx-auto h-12 w-12 text-gray-500" />
-                    <div className="mt-4 flex text-sm leading-6 text-gray-400">
-                        <label
-                        htmlFor="file-upload"
-                        className="relative cursor-pointer rounded-md font-semibold text-teal-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 hover:text-teal-300"
-                        >
-                        <span>Upload a file</span>
-                        </label>
-                        <p className="pl-1">or drag and drop</p>
+            {/* CREATE MODE: GUIDED ASSISTANT */}
+            {activeMode === 'create' && (
+                <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-gray-200">Intelligent Design Brief</h2>
+                    <div>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">1. Brand Name & Industry</label>
+                        <div className="grid grid-cols-2 gap-2">
+                           <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., The Daily Grind" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
+                           <input type="text" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Coffee Shop" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
+                        </div>
                     </div>
-                    <p className="text-xs leading-5 text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                     <div>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">2. Describe your vision</label>
+                        <textarea value={vision} onChange={(e) => setVision(e.target.value)} rows={3} placeholder="e.g., A mix of vintage engraving and modern tech..." className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"></textarea>
                     </div>
-                ) : (
-                    <div className="relative group">
-                        <img src={originalImagePreview} alt="Original logo preview" className="max-h-60 rounded-md" />
-                        <label htmlFor="file-upload" className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                            Change Image
-                        </label>
+                    <div>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">3. Designer Persona</label>
+                         <div className="grid grid-cols-2 gap-2">
+                            {DESIGNER_PERSONAS.map(p => <button key={p.name} onClick={() => setDesignerPersona(p.value)} className={`text-left p-2 text-xs font-medium rounded-md transition-all border ${designerPersona === p.value ? 'bg-teal-500 text-white border-teal-400' : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600 border-gray-600'}`}>{p.name}</button>)}
+                        </div>
                     </div>
-                )}
+                    <div>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">4. Visual Inspiration (optional, up to 3)</label>
+                        <div className="flex items-center gap-4">
+                            <label htmlFor="inspiration-upload" className="cursor-pointer rounded-md bg-gray-700 px-3 py-2 text-sm font-semibold text-teal-400 hover:bg-gray-600">Upload Images</label>
+                            <input id="inspiration-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleInspirationUpload} />
+                            <div className="flex gap-2">
+                                {inspirationPreviews.map((src, i) => <img key={i} src={src} className="h-10 w-10 rounded-md object-cover"/>)}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="pt-2">
+                        <button onClick={handleGuidedSubmit} disabled={isCreateDisabled} className="w-full flex items-center justify-center gap-2 rounded-md bg-teal-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:scale-100">Create New Logo <SparklesIcon className="h-5 w-5" /></button>
+                    </div>
                 </div>
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="prompt" className="text-lg font-semibold text-gray-300 mb-2 block">
-                {activeMode === 'edit' ? '2. Describe Your Edit' : '1. Describe Your Logo'}
-            </label>
-            <textarea
-              id="prompt"
-              rows={4}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-teal-500 sm:text-sm sm:leading-6 transition"
-              placeholder={activeMode === 'edit' ? "e.g., Change the text to 'NewName', make the background blue..." : "e.g., A minimalist logo for a coffee shop called 'The Daily Grind'..."}
-            />
-            <div className="mt-4">
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Need inspiration? Try one of these:</h3>
-                <div className="flex flex-wrap gap-2">
-                    {promptSuggestions.map((suggestion) => (
-                        <button
-                            key={suggestion}
-                            onClick={() => handleSuggestionClick(suggestion)}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-700/80 rounded-full hover:bg-teal-600 hover:text-white transition-all duration-200"
-                        >
-                            {suggestion}
-                        </button>
-                    ))}
+            )}
+            
+            {/* EDIT MODE: CONVERSATIONAL CHAT */}
+            {activeMode === 'edit' && (
+                 <div className="flex flex-col h-full">
+                    {!generatedImage ? (
+                        <div>
+                           <label className="text-lg font-semibold text-gray-300 mb-2 block">Upload a Logo to Edit</label>
+                           <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-600 px-6 py-10 hover:border-teal-400 transition-colors">
+                                <input id="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
+                                <div className="text-center">
+                                    <UploadIcon className="mx-auto h-12 w-12 text-gray-500" />
+                                    <div className="mt-4 flex text-sm text-gray-400"><label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-semibold text-teal-400 hover:text-teal-300"><span>Upload a file</span></label><p className="pl-1">or drag and drop</p></div>
+                                    <p className="text-xs text-gray-500">PNG, JPG, etc.</p>
+                                </div>
+                           </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col flex-grow min-h-0">
+                            <div className="flex-grow overflow-y-auto pr-2 space-y-4 mb-4">
+                                <p className="text-center text-sm text-gray-400">This is your editing canvas. What would you like to change?</p>
+                                {editHistory.map((entry, index) => ( <div key={index} className="text-right ml-8"> <p className="bg-teal-800/50 text-white text-sm rounded-lg py-2 px-3 inline-block">{entry.user}</p> </div> ))}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <div className="relative">
+                                <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && status !== 'loading' && handleEditSubmit()} placeholder="e.g., Change the color to blue..." className="block w-full rounded-md border-0 bg-gray-700/80 py-3 pl-4 pr-12 text-gray-200 ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-teal-500" disabled={status === 'loading'} />
+                                <button onClick={handleEditSubmit} disabled={status === 'loading' || !prompt} className="absolute inset-y-0 right-0 flex items-center pr-3 disabled:opacity-50 text-teal-400 hover:text-teal-300"> <SendIcon className="h-6 w-6"/> </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            </div>
-          </div>
-
-          <div className="pt-4">
-             <button
-              onClick={handleSubmit}
-              disabled={isSubmitDisabled}
-              className="w-full flex items-center justify-center gap-2 rounded-md bg-teal-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 disabled:scale-100"
-            >
-              {isLoading ? 'Generating...' : (activeMode === 'edit' ? 'Generate New Version' : 'Create New Logo')}
-              <SparklesIcon className="h-5 w-5" />
-            </button>
-          </div>
+            )}
         </div>
 
-        {/* Output Panel */}
-        <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex items-center justify-center min-h-[300px]">
-           <div className="w-full h-full flex items-center justify-center">
-                {isLoading ? (
-                    <LoadingSpinner />
-                ) : error ? (
-                    <div className="text-center text-red-400 space-y-4">
-                        <div>
-                            <p className="font-semibold">Generation Failed</p>
-                            <p className="text-sm mt-1">{error}</p>
+        {/* --- OUTPUT PANEL --- */}
+        <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex flex-col items-center justify-center min-h-[500px] space-y-4">
+            {status === 'loading' && <LoadingSpinner text="Generating..." />}
+            {status === 'error' && error && (
+                <div className="text-center text-red-400 space-y-4">
+                    <div><p className="font-semibold">Generation Failed</p><p className="text-sm mt-1">{error}</p></div>
+                    <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-500"><RefreshIcon className="h-5 w-5" />Start Over</button>
+                </div>
+            )}
+            {status !== 'loading' && !generatedImage && (
+                <div className="text-center text-gray-500 space-y-2">
+                    <SparklesIcon className="h-16 w-16 mx-auto text-gray-600"/>
+                    <h3 className="text-lg font-medium">Your brand identity awaits</h3>
+                    <p className="mt-1 text-sm">Use the intelligent brief to get started.</p>
+                </div>
+            )}
+            {generatedImage && (
+                <div className="w-full text-center space-y-4 overflow-y-auto">
+                    <img src={generatedImage} alt="Generated logo" className="max-h-60 mx-auto rounded-md object-contain" />
+                    {!brandKit && (<button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 transition-all"><WandIcon className="h-5 w-5" />Build Brand Kit</button>)}
+                    
+                    {brandKit && (
+                        <div className="text-left bg-gray-900/50 p-4 rounded-lg border border-gray-700 space-y-6">
+                            {/* Downloads */}
+                            <div>
+                                <h3 className="text-base font-semibold text-teal-300 mb-2">Download Assets</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                     <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-xs bg-cyan-700 hover:bg-cyan-600 p-2 rounded-md">Color Logo</button>
+                                     <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.white?.status === 'loading' ? '...' : 'White Logo'}</button>
+                                     <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.profile_picture?.status === 'loading' ? '...' : 'Profile Picture'}</button>
+                                </div>
+                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+{/* Fix: Added non-null assertion `!` to url property as TypeScript was failing to infer its existence after the check. */}
+                                     {logoVariations.white?.url && <img src={logoVariations.white.url!} className="h-16 w-16 object-contain rounded-md bg-gray-800 p-1"/>}
+{/* Fix: Added non-null assertion `!` to url property as TypeScript was failing to infer its existence after the check. */}
+                                     {logoVariations.profile_picture?.url && <img src={logoVariations.profile_picture.url!} className="h-16 w-16 object-contain rounded-full"/>}
+                                 </div>
+                            </div>
+                            {/* Palette & Typography */}
+                            <div>
+                                <h3 className="text-base font-semibold text-teal-300 mb-2">Core Identity</h3>
+                                <div className="flex gap-2 mb-2">{brandKit.colors.map((c, i) => <div key={i} className="flex flex-col items-center gap-1"><div className="w-8 h-8 rounded-full border border-gray-600" style={{backgroundColor: c.hex}}></div><p className="text-xs text-gray-400">{c.hex}</p></div>)}</div>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div><p className="text-gray-400">Heading</p><p className="text-sm text-white">{brandKit.typography.headingFont}</p></div>
+                                    <div><p className="text-gray-400">Body</p><p className="text-sm text-white">{brandKit.typography.bodyFont}</p></div>
+                                </div>
+                            </div>
+                            {/* Mockups */}
+                            <div>
+                                <h3 className="text-base font-semibold text-teal-300 mb-2">Mockups</h3>
+                                <div className="flex flex-wrap gap-2 mb-2">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{generatedMockups[type]?.status === 'loading' ? '...' : type}</button>)}</div>
+{/* Fix: Proactively added non-null assertion `!` to mockup.url to prevent potential TypeScript errors, following the same pattern as the logo variations. */}
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{Object.values(generatedMockups).filter(m => m.url).map((mockup, i) => <img key={i} src={mockup.url!} alt="Mockup" className="rounded-md object-cover"/>)}</div>
+                            </div>
+                            {/* Social Post */}
+                            <div>
+                                <h3 className="text-base font-semibold text-teal-300 mb-2">Social Media</h3>
+                                {!socialPost && <button onClick={handleGenerateSocialPost} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md">Generate Launch Post</button>}
+                                {socialPost?.status === 'loading' && <p className="text-xs text-gray-400">Generating post...</p>}
+                                {socialPost?.status === 'success' && socialPost.image && <div className="flex gap-2 items-start"><img src={socialPost.image} className="w-1/3 rounded-md"/><p className="text-xs text-gray-300 p-2 bg-gray-800 rounded-md w-2/3">{socialPost.caption}</p></div>}
+                            </div>
+                            {/* Guidelines */}
+                             <div>
+                                <h3 className="text-base font-semibold text-teal-300 mb-2">Brand Guidelines</h3>
+                                {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md">Generate Guidelines</button>}
+                                {brandGuidelines?.status === 'loading' && <p className="text-xs text-gray-400">Generating guidelines...</p>}
+                                {brandGuidelines?.status === 'success' && <div className="grid grid-cols-2 gap-4 text-xs"><div><h4 className="font-semibold text-green-400 mb-1">Dos</h4><ul className="list-disc list-inside space-y-1">{brandGuidelines.dos?.map((d,i)=><li key={i}>{d}</li>)}</ul></div><div><h4 className="font-semibold text-red-400 mb-1">Don'ts</h4><ul className="list-disc list-inside space-y-1">{brandGuidelines.donts?.map((d,i)=><li key={i}>{d}</li>)}</ul></div></div>}
+                            </div>
                         </div>
-                        <button
-                          onClick={handleReset}
-                          className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 transition-all"
-                        >
-                          <RefreshIcon className="h-5 w-5" />
-                          Start Over
-                        </button>
-                    </div>
-                ) : generatedImage ? (
-                    <div className="text-center space-y-4">
-                        <img src={generatedImage} alt="Generated logo" className="max-h-[24rem] rounded-md object-contain" />
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                            <button
-                              onClick={handleDownload}
-                              className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-600 transition-all duration-300"
-                            >
-                              <DownloadIcon className="h-5 w-5" />
-                              Download as PNG
-                            </button>
-                             <button
-                              onClick={handleReset}
-                              className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 transition-all"
-                            >
-                              <RefreshIcon className="h-5 w-5" />
-                              Start Over
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-center space-y-4">
-                      <div className="text-gray-500">
-                        <h3 className="text-lg font-medium">Your new logo will appear here</h3>
-                        <p className="mt-1 text-sm">Describe your logo or upload one to get started.</p>
-                      </div>
-                      <button
-                        disabled
-                        className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white shadow-sm cursor-not-allowed"
-                      >
-                        <DownloadIcon className="h-5 w-5" />
-                        Download as PNG
-                      </button>
-                    </div>
-                )}
-           </div>
+                    )}
+                </div>
+             )}
         </div>
       </main>
     </div>
