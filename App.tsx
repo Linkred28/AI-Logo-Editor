@@ -212,7 +212,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGenerateLogoVariation = async (variation: 'white' | 'profile_picture') => {
+  const handleGenerateLogoVariation = async (variation: 'white' | 'profile_picture' | 'transparent_bg') => {
     if (!generatedImage) return;
     setLogoVariations(prev => ({ ...prev, [variation]: { status: 'loading' } }));
     try {
@@ -401,8 +401,9 @@ const App: React.FC = () => {
                             {/* Downloads */}
                             <div>
                                 <h3 className="text-base font-semibold text-teal-300 mb-2">Download Assets</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
                                      <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-xs bg-cyan-700 hover:bg-cyan-600 p-2 rounded-md flex items-center justify-center gap-1"><DownloadIcon className="h-4 w-4" />Color Logo</button>
+                                     <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.transparent_bg?.status === 'loading' ? '...' : 'Remove BG'}</button>
                                      <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.white?.status === 'loading' ? '...' : 'White Logo'}</button>
                                      <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.profile_picture?.status === 'loading' ? '...' : 'Profile Picture'}</button>
                                 </div>
@@ -419,6 +420,16 @@ const App: React.FC = () => {
                                         <div className="relative group">
                                             <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-16 w-16 object-contain rounded-full"/>
                                             <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
+                                                <DownloadIcon className="h-4 w-4"/>
+                                            </button>
+                                        </div>
+                                    )}
+                                    {logoVariations.transparent_bg?.url && (
+                                        <div className="relative group">
+                                            <div className="h-16 w-16 rounded-md checkerboard p-1 flex items-center justify-center">
+                                                <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
+                                            </div>
+                                            <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
                                                 <DownloadIcon className="h-4 w-4"/>
                                             </button>
                                         </div>

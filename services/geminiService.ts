@@ -123,12 +123,14 @@ export const generateMockup = async (logoBase64: string, mockupType: string): Pr
     return generateImageFromParts([imagePart, textPart]);
 }
 
-export const generateLogoVariation = async (logoBase64: string, variationType: 'white' | 'profile_picture'): Promise<string> => {
+export const generateLogoVariation = async (logoBase64: string, variationType: 'white' | 'profile_picture' | 'transparent_bg'): Promise<string> => {
     const pureBase64 = logoBase64.split(',')[1];
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
     let prompt = '';
     if (variationType === 'white') {
-        prompt = "Recreate this logo in solid white. The output must be a PNG file with a true transparent background (alpha channel). Do not render a checkerboard or any other color as the background. Ensure the logo's original shape is perfectly maintained.";
+        prompt = "Your task is to create a logo variation. Recreate the provided logo in solid white. The output must be a PNG file where the background is completely transparent (full alpha channel). Do not add a checkerboard pattern, colors, or any other elements to the background. Only the white logo shape should be visible.";
+    } else if (variationType === 'transparent_bg') {
+        prompt = "Your single, critical task is to perfectly remove the background from this logo image. The output MUST be a PNG file with a true, empty alpha channel for transparency. Do NOT under any circumstances render a checkerboard, a solid color, or any other pattern in the background. Isolate the main logo subject and make everything else fully transparent.";
     } else { // profile_picture
         prompt = "Adapt this logo to be a perfect social media profile picture. It should be easily recognizable when small and fit well inside a circular frame. Place it on a solid, neutral background that complements the logo.";
     }
