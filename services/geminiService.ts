@@ -50,6 +50,9 @@ const generateImageFromParts = async (parts: Part[]): Promise<string> => {
   } catch (error) {
     console.error("Error generating image from parts:", error);
     if (error instanceof Error) {
+        if (error.message.includes('RESOURCE_EXHAUSTED')) {
+             throw new Error("API rate limit exceeded. Please check your plan and billing details, or try again later.");
+        }
         throw new Error(`Failed to generate image: ${error.message}`);
     }
     throw new Error("An unknown error occurred while generating the image.");
@@ -119,7 +122,21 @@ export const getInitialBrandKit = async (logoBase64: string) => {
 export const generateMockup = async (logoBase64: string, mockupType: string): Promise<string> => {
     const pureBase64 = logoBase64.split(',')[1];
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    const textPart = { text: `Create a photorealistic mockup of a ${mockupType} featuring this logo. The background should be clean and professional, suitable for a brand presentation.` };
+
+    const mockupPrompts: Record<string, string> = {
+        'Business Card': 'Create a photorealistic mockup of a modern, professional business card featuring this logo. The card should be placed on a clean, complementary surface like a wooden desk or marble countertop.',
+        'Coffee Cup': 'Generate a realistic mockup of a white ceramic coffee cup with this logo elegantly printed on its side. The scene should have soft lighting and a cafe-like ambiance.',
+        'T-Shirt': 'Create a mockup of this logo on a high-quality, plain-colored t-shirt (e.g., heather grey, black, or white). The photo should be of the t-shirt folded neatly or worn by a mannequin.',
+        'Storefront Sign': 'Generate a photorealistic mockup of a modern storefront with this logo displayed as a 3D sign. The sign could be blade-style or backlit, on a brick or glass facade.',
+        'Social Media Profile': 'Create a mockup of a generic social media profile page viewed on a smartphone screen, prominently featuring the logo as the circular profile picture.',
+        'Website on Laptop': 'Generate a photorealistic mockup of a modern, minimalist website homepage displayed on a laptop screen (like a MacBook). The logo should be clearly visible in the header. The scene should be a clean workspace.',
+        'Tote Bag': 'Create a mockup of this logo printed on a canvas tote bag. The bag can be held by a person or hanging against a neutral, textured wall.',
+        'Letterhead': 'Generate a mockup of an A4 or US Letter-sized letterhead with this logo placed elegantly in the top-left corner. The paper should have a subtle texture and be placed on a professional desk.',
+    };
+
+    const prompt = mockupPrompts[mockupType] || `Create a photorealistic mockup of a ${mockupType} featuring this logo. The background should be clean and professional, suitable for a brand presentation.`;
+    const textPart = { text: prompt };
+    
     return generateImageFromParts([imagePart, textPart]);
 }
 
@@ -128,11 +145,11 @@ export const generateLogoVariation = async (logoBase64: string, variationType: '
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
     let prompt = '';
     if (variationType === 'white') {
-        prompt = "Your task is to create a logo variation. Recreate the provided logo in solid white. The output must be a PNG file where the background is completely transparent (full alpha channel). Do not add a checkerboard pattern, colors, or any other elements to the background. Only the white logo shape should be visible.";
+        prompt = "Generate a new version of the provided logo that is solid white with a completely transparent background. The final image must be a PNG with a full alpha channel, containing only the white logo shape, with no background color or pattern.";
     } else if (variationType === 'transparent_bg') {
-        prompt = "Your single, critical task is to perfectly remove the background from this logo image. The output MUST be a PNG file with a true, empty alpha channel for transparency. Do NOT under any circumstances render a checkerboard, a solid color, or any other pattern in the background. Isolate the main logo subject and make everything else fully transparent.";
+        prompt = "Generate a new version of the provided logo with its background completely removed. Your task is to perfectly isolate the main subject (the central icon and text) and make everything else transparent. This includes removing gradients, background shapes, or decorative elements. The final output must be a PNG with a true transparent alpha channel, containing only the logo's core elements.";
     } else { // profile_picture
-        prompt = "Adapt this logo to be a perfect social media profile picture. It should be easily recognizable when small and fit well inside a circular frame. Place it on a solid, neutral background that complements the logo.";
+        prompt = "Generate a social media profile picture from this logo. The new image should be adapted to be easily recognizable when small and fit well inside a circular frame. Place the logo on a solid, neutral background that complements its colors.";
     }
     const textPart = { text: prompt };
     return generateImageFromParts([imagePart, textPart]);
@@ -182,4 +199,103 @@ export const generateBrandGuidelines = async (logoBase64: string) => {
         },
     });
     return JSON.parse(response.text);
+};
+
+// --- BRANDING TEXT GENERATION ---
+const handleTextGenerationError = (error: unknown): never => {
+    console.error("Error during text generation:", error);
+    if (error instanceof Error && error.message.includes('RESOURCE_EXHAUSTED')) {
+        throw new Error("API rate limit exceeded. Please check your plan and billing details, or try again later.");
+    }
+    throw new Error("Failed to generate text suggestion.");
+}
+
+const generateText = async (prompt: string): Promise<string> => {
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+        return response.text.trim().replace(/["']/g, ''); // Clean up quotes
+    } catch (error) {
+        handleTextGenerationError(error);
+    }
+};
+
+export const generateBrandName = (industry: string, vision: string) => {
+    const prompt = `You are a branding expert. Generate a single, creative, and memorable brand name for a company in the '${industry}' industry. Their vision is: '${vision}'. Return only the name, with no extra text or quotes.`;
+    return generateText(prompt);
+};
+
+export const generateSloganSuggestions = async (brandName: string, industry: string, vision: string): Promise<string[]> => {
+    const prompt = `You are a branding expert. Generate 5 creative and catchy slogans for a brand named '${brandName}' in the '${industry}' industry. Their vision is: '${vision}'.`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        slogans: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    },
+                    required: ['slogans']
+                },
+            },
+        });
+        const result = JSON.parse(response.text);
+        return result.slogans || [];
+    } catch (error) {
+        handleTextGenerationError(error);
+    }
+};
+
+export const generateNameFromLogo = async (logoBase64: string) => {
+    const pureBase64 = logoBase64.split(',')[1];
+    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
+    const textPart = { text: "Analyze this logo. Suggest a creative and fitting brand name for it. Return only the name, with no extra text or quotes." };
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: { parts: [imagePart, textPart] }
+        });
+        return response.text.trim().replace(/["']/g, '');
+    } catch (error) {
+        handleTextGenerationError(error);
+    }
+};
+
+
+export const generateSloganSuggestionsFromLogo = async (logoBase64: string, brandName: string): Promise<string[]> => {
+    const pureBase64 = logoBase64.split(',')[1];
+    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
+    const textPart = { text: `Analyze this logo for a brand named '${brandName}'. Suggest 5 short, catchy slogans that match its style.` };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: { parts: [imagePart, textPart] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        slogans: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    },
+                     required: ['slogans']
+                },
+            },
+        });
+        const result = JSON.parse(response.text);
+        return result.slogans || [];
+    } catch (error) {
+        handleTextGenerationError(error);
+    }
 };

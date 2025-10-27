@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, ChangeEvent, KeyboardEvent, useRef, useEffect } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
 import { 
@@ -7,7 +8,11 @@ import {
     generateMockup,
     generateLogoVariation,
     generateSocialPost,
-    generateBrandGuidelines
+    generateBrandGuidelines,
+    generateBrandName,
+    generateSloganSuggestions,
+    generateNameFromLogo,
+    generateSloganSuggestionsFromLogo
 } from './services/geminiService';
 
 type Mode = 'create' | 'edit';
@@ -16,10 +21,10 @@ type BrandKit = {
   typography: { headingFont: string; bodyFont: string };
 };
 type Status = 'idle' | 'loading' | 'error' | 'success';
-// Fix: Add a specific type for the mockup state to help with type inference downstream.
 type MockupState = {
   status: Status;
   url?: string;
+  error?: string;
 };
 
 
@@ -32,6 +37,7 @@ const WandIcon: React.FC<{className?: string}> = ({ className }) => ( <svg class
 const SendIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg> );
 const CheckIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> );
 const XIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg> );
+const RevertIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg> );
 
 
 // --- LOADING SPINNERS ---
@@ -48,8 +54,12 @@ const DESIGNER_PERSONAS = [
     { name: 'Vintage Artisan', value: 'a style with textures, stamps, and seals, using serif and script typography for a vintage, handcrafted feel.' },
     { name: 'Tech Innovator', value: 'a futuristic, abstract style with gradients and modern aesthetics.' },
     { name: 'Playful Illustrator', value: 'a fun, friendly, hand-drawn style, possibly featuring a character or mascot.' },
+    { name: 'Corporate Minimalist', value: 'a clean, modern, and professional style, often using simple geometric shapes and sans-serif fonts for a corporate feel.' },
+    { name: 'Luxury Classic', value: 'an elegant and sophisticated style, featuring refined serif fonts, monograms, and a timeless, high-end aesthetic.' },
+    { name: 'Eco Organic', value: 'a natural, earthy style with hand-drawn elements, textured effects, and organic shapes, conveying sustainability.' },
+    { name: 'Bold Pop', value: 'a vibrant, energetic style using bold graphics, bright colors, and playful typography inspired by pop art.' },
 ];
-const MOCKUP_TYPES = ['Business Card', 'Coffee Cup', 'T-Shirt', 'Storefront Sign', 'Social Media Profile'];
+const MOCKUP_TYPES = ['Business Card', 'Coffee Cup', 'T-Shirt', 'Storefront Sign', 'Social Media Profile', 'Website on Laptop', 'Tote Bag', 'Letterhead'];
 
 const App: React.FC = () => {
   const [activeMode, setActiveMode] = useState<Mode>('create');
@@ -59,9 +69,10 @@ const App: React.FC = () => {
   // Universal State
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<string>('');
+  const [brandName, setBrandName] = useState('');
+  const [slogan, setSlogan] = useState('');
   
   // Create Mode State
-  const [brandName, setBrandName] = useState('');
   const [industry, setIndustry] = useState('');
   const [vision, setVision] = useState('');
   const [designerPersona, setDesignerPersona] = useState('');
@@ -74,11 +85,20 @@ const App: React.FC = () => {
   
   // Brand Kit State
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
-  // Fix: Use the MockupState type for the generatedMockups state.
   const [generatedMockups, setGeneratedMockups] = useState<Record<string, MockupState>>({});
   const [socialPost, setSocialPost] = useState<{status: Status, image?: string, caption?: string} | null>(null);
   const [brandGuidelines, setBrandGuidelines] = useState<{status: Status, dos?: string[], donts?: string[]} | null>(null);
   const [logoVariations, setLogoVariations] = useState<Record<string, {status: Status, url?: string}>>({});
+
+  // Text generation loading state
+  const [isGeneratingName, setIsGeneratingName] = useState(false);
+
+  // Slogan Modal State
+  const [isSloganModalOpen, setIsSloganModalOpen] = useState(false);
+  const [sloganSuggestions, setSloganSuggestions] = useState<string[]>([]);
+  const [sloganGenerationStatus, setSloganGenerationStatus] = useState<Status>('idle');
+  const [sloganGenerationError, setSloganGenerationError] = useState<string | null>(null);
+
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [editHistory]);
@@ -89,6 +109,7 @@ const App: React.FC = () => {
     setGeneratedImage(null);
     setPrompt('');
     setBrandName('');
+    setSlogan('');
     setIndustry('');
     setVision('');
     setDesignerPersona('');
@@ -136,6 +157,7 @@ const App: React.FC = () => {
       try {
         const base64Preview = await fileToBase64(file);
         setGeneratedImage(base64Preview);
+        setEditHistory([{ user: 'Original', image: base64Preview }]);
       } catch (err) {
         setError('Failed to read the image file.');
         setStatus('error');
@@ -145,6 +167,7 @@ const App: React.FC = () => {
 
   const handleGuidedSubmit = useCallback(async () => {
     let fullPrompt = `A professional, high-quality logo for a brand named '${brandName}' in the ${industry} industry.`;
+    if (slogan) fullPrompt += ` Their slogan is "${slogan}".`;
     if (vision) fullPrompt += ` The brand's vision is: "${vision}".`;
     if (designerPersona) fullPrompt += ` The desired style is ${designerPersona}`;
     if (inspirationPreviews.length > 0) fullPrompt += ` Draw inspiration from the provided images for mood, color, and style.`;
@@ -167,7 +190,7 @@ const App: React.FC = () => {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
       setStatus('error');
     }
-  }, [brandName, industry, vision, designerPersona, inspirationFiles]);
+  }, [brandName, industry, vision, designerPersona, inspirationFiles, slogan]);
 
   const handleEditSubmit = useCallback(async () => {
     if (!prompt || !generatedImage || !originalImageFile) return;
@@ -176,7 +199,7 @@ const App: React.FC = () => {
     setStatus('loading');
     setError(null);
     try {
-        const editInstruction = `You are an expert logo designer. Your task is to edit the provided logo image based on this user request: "${currentPrompt}". It is crucial that you generate a new image with the requested modifications, not return the original. The final output must be a professional, clean, high-quality logo.`;
+        const editInstruction = `Generate a new image by applying the following edit to the provided logo: '${currentPrompt}'. You are an expert logo designer. When asked to change text, you must PERFECTLY match the original font, color, 3D effects, texture, lighting, and perspective. Apply the edit precisely and do not alter any other part of the logo unless requested. The output must be the newly generated image with the edits applied.`;
         const newImageBase64 = await editImageWithGemini( generatedImage, originalImageFile.type, editInstruction );
         setGeneratedImage(newImageBase64);
         setEditHistory(prev => [...prev, { user: currentPrompt, image: newImageBase64 }]);
@@ -186,6 +209,14 @@ const App: React.FC = () => {
         setStatus('error');
     }
 }, [prompt, generatedImage, originalImageFile]);
+
+  const handleRevertToVersion = useCallback((index: number) => {
+    const versionToRestore = editHistory[index];
+    if (!versionToRestore) return;
+
+    setGeneratedImage(versionToRestore.image);
+    setEditHistory(editHistory.slice(0, index + 1));
+  }, [editHistory]);
 
   const handleGenerateInitialBrandKit = useCallback(async () => {
     if (!generatedImage) return;
@@ -208,7 +239,8 @@ const App: React.FC = () => {
         const url = await generateMockup(generatedImage, mockupType);
         setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'success', url } }));
     } catch (e) {
-        setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'error' } }));
+        const errorMessage = e instanceof Error ? e.message : "Failed to generate mockup.";
+        setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'error', error: errorMessage } }));
     }
   };
 
@@ -245,6 +277,57 @@ const App: React.FC = () => {
     }
   }
 
+ const handleGenerateName = async () => {
+    setIsGeneratingName(true);
+    setError(null);
+    try {
+      let result = '';
+      if (activeMode === 'create') {
+        if (!industry) {
+            setError("Please enter an industry to generate a name.");
+            return;
+        }
+        result = await generateBrandName(industry, vision);
+        setBrandName(result);
+      } else { // edit mode
+        if (!generatedImage) return;
+        result = await generateNameFromLogo(generatedImage);
+        setBrandName(result);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate name suggestion.');
+    } finally {
+      setIsGeneratingName(false);
+    }
+  };
+
+  const handleOpenSloganModal = async () => {
+    if (!brandName) {
+        setError("Please enter a brand name to generate slogans.");
+        return;
+    }
+    setIsSloganModalOpen(true);
+    setSloganGenerationStatus('loading');
+    setSloganSuggestions([]);
+    setSloganGenerationError(null);
+    try {
+        const results = activeMode === 'create'
+            ? await generateSloganSuggestions(brandName, industry, vision)
+            : await generateSloganSuggestionsFromLogo(generatedImage!, brandName);
+
+        setSloganSuggestions(results);
+        setSloganGenerationStatus('success');
+    } catch (err) {
+        setSloganGenerationError(err instanceof Error ? err.message : 'Failed to generate suggestions.');
+        setSloganGenerationStatus('error');
+    }
+};
+
+const handleSelectSlogan = (selectedSlogan: string) => {
+    setSlogan(selectedSlogan);
+    setIsSloganModalOpen(false);
+};
+
   const downloadImage = (url: string, filename: string) => {
     const link = document.createElement('a');
     link.href = url;
@@ -254,7 +337,7 @@ const App: React.FC = () => {
     document.body.removeChild(link);
   };
   
-  const isCreateDisabled = status === 'loading' || !brandName || !industry || !designerPersona;
+  const isCreateDisabled = status === 'loading' || !brandName || !industry;
   
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 p-4 sm:p-6 lg:p-8">
@@ -286,22 +369,32 @@ const App: React.FC = () => {
                     <div>
                         <label className="text-sm font-medium text-gray-300 mb-1 block">1. Brand Name & Industry</label>
                         <div className="grid grid-cols-2 gap-2">
-                           <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., The Daily Grind" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
+                            <div className="relative">
+                                <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., The Daily Grind" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
+                                <button onClick={handleGenerateName} disabled={isGeneratingName || !industry} title="Suggest a name" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                            </div>
                            <input type="text" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Coffee Shop" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
                         </div>
                     </div>
+                    <div>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">2. Slogan (optional)</label>
+                        <div className="relative">
+                           <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="e.g., Your daily dose of inspiration." className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
+                           <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest slogans" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                        </div>
+                    </div>
                      <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">2. Describe your vision</label>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">3. Describe your vision (optional)</label>
                         <textarea value={vision} onChange={(e) => setVision(e.target.value)} rows={3} placeholder="e.g., A mix of vintage engraving and modern tech..." className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"></textarea>
                     </div>
                     <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">3. Designer Persona</label>
-                         <div className="grid grid-cols-2 gap-2">
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">4. Designer Persona (optional)</label>
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                             {DESIGNER_PERSONAS.map(p => <button key={p.name} onClick={() => setDesignerPersona(p.value)} className={`text-left p-2 text-xs font-medium rounded-md transition-all border ${designerPersona === p.value ? 'bg-teal-500 text-white border-teal-400' : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600 border-gray-600'}`}>{p.name}</button>)}
                         </div>
                     </div>
                     <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">4. Visual Inspiration (optional, up to 3)</label>
+                        <label className="text-sm font-medium text-gray-300 mb-1 block">5. Visual Inspiration (optional, up to 3)</label>
                         <div className="flex items-center gap-4">
                             <label htmlFor="inspiration-upload" className="cursor-pointer rounded-md bg-gray-700 px-3 py-2 text-sm font-semibold text-teal-400 hover:bg-gray-600">Upload Images</label>
                             <input id="inspiration-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleInspirationUpload} />
@@ -333,27 +426,54 @@ const App: React.FC = () => {
                         </div>
                     ) : (
                         <div className="flex flex-col flex-grow min-h-0">
+                            <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                                <div className="relative">
+                                     <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Brand Name" className="w-full bg-transparent text-lg font-semibold text-white border-none focus:ring-0 p-1"/>
+                                      <button onClick={handleGenerateName} disabled={isGeneratingName} title="Suggest a name based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                </div>
+                                <div className="relative">
+                                    <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Slogan" className="w-full bg-transparent text-sm text-gray-400 border-none focus:ring-0 p-1"/>
+                                    <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest a slogan based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                </div>
+                            </div>
                             <div className="flex-grow overflow-y-auto pr-2 space-y-4 mb-4">
-                                <p className="text-center text-sm text-gray-400">This is your editing canvas. What would you like to change?</p>
-                                {editHistory.map((entry, index) => (
-                                    <React.Fragment key={index}>
-                                        <div className="flex justify-end">
-                                            <p className="bg-teal-800/50 text-white text-sm rounded-lg py-2 px-3 inline-block max-w-xs text-left">{entry.user}</p>
-                                        </div>
-                                        <div className="flex justify-start">
-                                            <div className="relative group">
-                                                <img src={entry.image} alt={`Edit step ${index + 1}`} className="max-h-32 rounded-lg object-contain bg-gray-700/50 p-1" />
-                                                <button
-                                                    onClick={() => downloadImage(entry.image, `logo_edit_${index + 1}.png`)}
-                                                    className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    aria-label={`Download edit step ${index + 1}`}
-                                                >
-                                                    <DownloadIcon className="h-4 w-4"/>
-                                                </button>
+                                {editHistory.map((entry, index) => {
+                                    const isOriginal = index === 0;
+                                    const altText = isOriginal ? 'Original Image' : `Edit step ${index}`;
+                                    const filename = isOriginal ? 'logo_original.png' : `logo_edit_${index}.png`;
+
+                                    return (
+                                        <React.Fragment key={index}>
+                                            {/* User prompt bubble */}
+                                            {!isOriginal && (
+                                                <div className="flex justify-end">
+                                                    <p className="bg-teal-800/50 text-white text-sm rounded-lg py-2 px-3 inline-block max-w-xs text-left">{entry.user}</p>
+                                                </div>
+                                            )}
+
+                                            {/* AI image response */}
+                                            <div className="flex justify-start">
+                                                <div className="relative group">
+                                                    <img src={entry.image} alt={altText} className="max-h-32 rounded-lg object-contain bg-gray-700/50 p-1" />
+                                                    
+                                                    <button onClick={() => downloadImage(entry.image, filename)} className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${altText}`} title="Download this version" >
+                                                        <DownloadIcon className="h-4 w-4"/>
+                                                    </button>
+                                                    
+                                                    {index < editHistory.length - 1 && (
+                                                        <button onClick={() => handleRevertToVersion(index)} className="absolute bottom-1 left-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Use this version and continue editing from here`} title="Use this version" >
+                                                            <RevertIcon className="h-4 w-4"/>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </React.Fragment>
-                                ))}
+                                            
+                                            {isOriginal && (
+                                                <p className="text-center text-sm text-gray-400 pt-1">Original Image</p>
+                                            )}
+                                        </React.Fragment>
+                                    )
+                                })}
                                 <div ref={chatEndRef} />
                             </div>
                             <div className="relative">
@@ -394,6 +514,30 @@ const App: React.FC = () => {
                             <DownloadIcon className="h-5 w-5"/>
                         </button>
                     </div>
+
+                    <div className="w-full pt-4 space-y-4">
+                        <div className="flex justify-center items-center gap-4">
+                            <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="inline-flex items-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-500 disabled:bg-gray-700 transition-all">
+                                <WandIcon className="h-5 w-5" />
+                                {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : 'Remove Background'}
+                            </button>
+                        </div>
+                        {logoVariations.transparent_bg?.url && (
+                            <div className="flex flex-col items-center mt-2">
+                                <div className="relative group">
+                                    <div className="h-24 w-24 rounded-md checkerboard p-1 flex items-center justify-center">
+                                        <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
+                                    </div>
+                                    <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
+                                        <DownloadIcon className="h-4 w-4"/>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="w-full border-t border-gray-700 my-4"></div>
+
                     {!brandKit && (<button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 transition-all"><WandIcon className="h-5 w-5" />Build Brand Kit</button>)}
                     
                     {brandKit && (
@@ -401,9 +545,8 @@ const App: React.FC = () => {
                             {/* Downloads */}
                             <div>
                                 <h3 className="text-base font-semibold text-teal-300 mb-2">Download Assets</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                      <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-xs bg-cyan-700 hover:bg-cyan-600 p-2 rounded-md flex items-center justify-center gap-1"><DownloadIcon className="h-4 w-4" />Color Logo</button>
-                                     <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.transparent_bg?.status === 'loading' ? '...' : 'Remove BG'}</button>
                                      <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.white?.status === 'loading' ? '...' : 'White Logo'}</button>
                                      <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.profile_picture?.status === 'loading' ? '...' : 'Profile Picture'}</button>
                                 </div>
@@ -424,16 +567,6 @@ const App: React.FC = () => {
                                             </button>
                                         </div>
                                     )}
-                                    {logoVariations.transparent_bg?.url && (
-                                        <div className="relative group">
-                                            <div className="h-16 w-16 rounded-md checkerboard p-1 flex items-center justify-center">
-                                                <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
-                                            </div>
-                                            <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
-                                                <DownloadIcon className="h-4 w-4"/>
-                                            </button>
-                                        </div>
-                                    )}
                                  </div>
                             </div>
                             {/* Palette & Typography */}
@@ -450,18 +583,26 @@ const App: React.FC = () => {
                                 <h3 className="text-base font-semibold text-teal-300 mb-2">Mockups</h3>
                                 <div className="flex flex-wrap gap-2 mb-2">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{generatedMockups[type]?.status === 'loading' ? '...' : type}</button>)}</div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                    {/* Fix: Cast the result of Object.entries to fix type inference issues. */}
-                                    {(Object.entries(generatedMockups) as [string, MockupState][])
-                                        .filter(([, m]) => m.status === 'success' && m.url)
-                                        .map(([key, mockup]) => (
-                                            <div key={key} className="relative group">
-                                                <img src={mockup.url!} alt={`${key} Mockup`} className="rounded-md object-cover"/>
-                                                <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(' ', '_')}.png`)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
-                                                    <DownloadIcon className="h-4 w-4"/>
-                                                </button>
-                                            </div>
-                                        ))
-                                    }
+                                    {/* Fix: Explicitly type the 'mockup' object to resolve type inference issues with Object.entries. */}
+                                    {Object.entries(generatedMockups).map(([key, mockup]: [string, MockupState]) => (
+                                        <div key={key} className="relative group aspect-square bg-gray-800/80 rounded-md flex items-center justify-center border border-gray-700/50" title={mockup.error}>
+                                            {mockup.status === 'loading' && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-teal-400"></div>}
+                                            {mockup.status === 'error' && (
+                                                <div className="text-center p-2">
+                                                    <p className="text-xs text-red-400">Failed</p>
+                                                    <button onClick={() => handleGenerateMockup(key)} className="mt-1 text-xs bg-red-500/50 hover:bg-red-500/80 p-1 rounded-md">Retry</button>
+                                                </div>
+                                            )}
+                                            {mockup.status === 'success' && mockup.url && (
+                                                <>
+                                                    <img src={mockup.url} alt={`${key} Mockup`} className="rounded-md object-cover w-full h-full"/>
+                                                    <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(/ /g, '_')}.png`)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
+                                                        <DownloadIcon className="h-4 w-4"/>
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             {/* Social Post */}
@@ -494,6 +635,47 @@ const App: React.FC = () => {
              )}
         </div>
       </main>
+      
+      {/* --- SLOGAN SUGGESTIONS MODAL --- */}
+      {isSloganModalOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setIsSloganModalOpen(false)}>
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-semibold text-teal-400">Slogan Suggestions</h2>
+                    <button onClick={() => setIsSloganModalOpen(false)} className="text-gray-400 hover:text-white"><XIcon className="h-6 w-6"/></button>
+                </div>
+
+                {sloganGenerationStatus === 'loading' && (
+                    <div className="flex flex-col items-center justify-center p-8 space-y-2">
+                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-400"></div>
+                        <p className="text-sm text-gray-300">Generating ideas...</p>
+                    </div>
+                )}
+                
+                {sloganGenerationStatus === 'error' && (
+                     <div className="text-center text-red-400 p-4 bg-red-900/20 rounded-lg">
+                        <p className="font-semibold">Generation Failed</p>
+                        <p className="text-sm mt-1">{sloganGenerationError}</p>
+                        <button onClick={handleOpenSloganModal} className="mt-4 inline-flex items-center gap-2 rounded-md bg-gray-600 px-3 py-1 text-sm font-semibold text-white hover:bg-gray-500"><RefreshIcon className="h-4 w-4" />Retry</button>
+                    </div>
+                )}
+
+                {sloganGenerationStatus === 'success' && (
+                    <div className="space-y-2">
+                        {sloganSuggestions.map((slogan, index) => (
+                             <button 
+                                key={index} 
+                                onClick={() => handleSelectSlogan(slogan)}
+                                className="w-full text-left p-3 rounded-md bg-gray-700/80 hover:bg-teal-800/50 ring-1 ring-gray-600 hover:ring-teal-500 transition-all text-gray-200"
+                            >
+                                {slogan}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
     </div>
   );
 };
