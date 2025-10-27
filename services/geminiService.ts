@@ -128,7 +128,7 @@ export const generateLogoVariation = async (logoBase64: string, variationType: '
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
     let prompt = '';
     if (variationType === 'white') {
-        prompt = "Convert this logo to be entirely solid white. The background must be transparent. Preserve all details of the original logo's shape.";
+        prompt = "Recreate this logo in solid white. The output must be a PNG file with a true transparent background (alpha channel). Do not render a checkerboard or any other color as the background. Ensure the logo's original shape is perfectly maintained.";
     } else { // profile_picture
         prompt = "Adapt this logo to be a perfect social media profile picture. It should be easily recognizable when small and fit well inside a circular frame. Place it on a solid, neutral background that complements the logo.";
     }

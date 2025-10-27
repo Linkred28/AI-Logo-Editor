@@ -16,6 +16,12 @@ type BrandKit = {
   typography: { headingFont: string; bodyFont: string };
 };
 type Status = 'idle' | 'loading' | 'error' | 'success';
+// Fix: Add a specific type for the mockup state to help with type inference downstream.
+type MockupState = {
+  status: Status;
+  url?: string;
+};
+
 
 // --- ICONS ---
 const UploadIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg> );
@@ -68,7 +74,8 @@ const App: React.FC = () => {
   
   // Brand Kit State
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
-  const [generatedMockups, setGeneratedMockups] = useState<Record<string, {status: Status, url?: string}>>({});
+  // Fix: Use the MockupState type for the generatedMockups state.
+  const [generatedMockups, setGeneratedMockups] = useState<Record<string, MockupState>>({});
   const [socialPost, setSocialPost] = useState<{status: Status, image?: string, caption?: string} | null>(null);
   const [brandGuidelines, setBrandGuidelines] = useState<{status: Status, dos?: string[], donts?: string[]} | null>(null);
   const [logoVariations, setLogoVariations] = useState<Record<string, {status: Status, url?: string}>>({});
@@ -103,10 +110,17 @@ const App: React.FC = () => {
     }
   }, [activeMode, handleReset]);
 
+  // Fix: Replaced Array.from with a manual loop to ensure correct type inference from FileList.
   const handleInspirationUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
-        const fileList = Array.from(files).slice(0, 3); // Limit to 3 files
+        const fileList: File[] = [];
+        for (let i = 0; i < Math.min(files.length, 3); i++) {
+            const file = files.item(i);
+            if (file) {
+                fileList.push(file);
+            }
+        }
         setInspirationFiles(fileList);
         const previews = await Promise.all(fileList.map(file => fileToBase64(file)));
         setInspirationPreviews(previews);
@@ -162,7 +176,8 @@ const App: React.FC = () => {
     setStatus('loading');
     setError(null);
     try {
-        const newImageBase64 = await editImageWithGemini( generatedImage, originalImageFile.type, `${currentPrompt}. Ensure the output is a professional, clean, high-quality logo.` );
+        const editInstruction = `You are an expert logo designer. Your task is to edit the provided logo image based on this user request: "${currentPrompt}". It is crucial that you generate a new image with the requested modifications, not return the original. The final output must be a professional, clean, high-quality logo.`;
+        const newImageBase64 = await editImageWithGemini( generatedImage, originalImageFile.type, editInstruction );
         setGeneratedImage(newImageBase64);
         setEditHistory(prev => [...prev, { user: currentPrompt, image: newImageBase64 }]);
         setStatus('success');
@@ -253,9 +268,15 @@ const App: React.FC = () => {
       <main className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* --- INPUT PANEL --- */}
         <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex flex-col space-y-6">
-            <div className="flex border-b border-gray-700">
-                <button onClick={() => handleModeChange('create')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'create' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Create</button>
-                <button onClick={() => handleModeChange('edit')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'edit' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Edit</button>
+            <div className="flex justify-between items-center border-b border-gray-700">
+                <div className="flex">
+                    <button onClick={() => handleModeChange('create')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'create' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Create</button>
+                    <button onClick={() => handleModeChange('edit')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'edit' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Edit</button>
+                </div>
+                 <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors" aria-label="Start Over">
+                    <RefreshIcon className="h-4 w-4" />
+                    Start Over
+                </button>
             </div>
 
             {/* CREATE MODE: GUIDED ASSISTANT */}
@@ -314,7 +335,25 @@ const App: React.FC = () => {
                         <div className="flex flex-col flex-grow min-h-0">
                             <div className="flex-grow overflow-y-auto pr-2 space-y-4 mb-4">
                                 <p className="text-center text-sm text-gray-400">This is your editing canvas. What would you like to change?</p>
-                                {editHistory.map((entry, index) => ( <div key={index} className="text-right ml-8"> <p className="bg-teal-800/50 text-white text-sm rounded-lg py-2 px-3 inline-block">{entry.user}</p> </div> ))}
+                                {editHistory.map((entry, index) => (
+                                    <React.Fragment key={index}>
+                                        <div className="flex justify-end">
+                                            <p className="bg-teal-800/50 text-white text-sm rounded-lg py-2 px-3 inline-block max-w-xs text-left">{entry.user}</p>
+                                        </div>
+                                        <div className="flex justify-start">
+                                            <div className="relative group">
+                                                <img src={entry.image} alt={`Edit step ${index + 1}`} className="max-h-32 rounded-lg object-contain bg-gray-700/50 p-1" />
+                                                <button
+                                                    onClick={() => downloadImage(entry.image, `logo_edit_${index + 1}.png`)}
+                                                    className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    aria-label={`Download edit step ${index + 1}`}
+                                                >
+                                                    <DownloadIcon className="h-4 w-4"/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </React.Fragment>
+                                ))}
                                 <div ref={chatEndRef} />
                             </div>
                             <div className="relative">
@@ -345,7 +384,16 @@ const App: React.FC = () => {
             )}
             {generatedImage && (
                 <div className="w-full text-center space-y-4 overflow-y-auto">
-                    <img src={generatedImage} alt="Generated logo" className="max-h-60 mx-auto rounded-md object-contain" />
+                    <div className="relative group inline-block">
+                        <img src={generatedImage} alt="Generated logo" className="max-h-60 mx-auto rounded-md object-contain" />
+                        <button 
+                            onClick={() => downloadImage(generatedImage, 'logo.png')} 
+                            className="absolute top-2 right-2 bg-black/60 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" 
+                            aria-label="Download logo"
+                        >
+                            <DownloadIcon className="h-5 w-5"/>
+                        </button>
+                    </div>
                     {!brandKit && (<button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 transition-all"><WandIcon className="h-5 w-5" />Build Brand Kit</button>)}
                     
                     {brandKit && (
@@ -354,15 +402,27 @@ const App: React.FC = () => {
                             <div>
                                 <h3 className="text-base font-semibold text-teal-300 mb-2">Download Assets</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                     <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-xs bg-cyan-700 hover:bg-cyan-600 p-2 rounded-md">Color Logo</button>
+                                     <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-xs bg-cyan-700 hover:bg-cyan-600 p-2 rounded-md flex items-center justify-center gap-1"><DownloadIcon className="h-4 w-4" />Color Logo</button>
                                      <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.white?.status === 'loading' ? '...' : 'White Logo'}</button>
                                      <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.profile_picture?.status === 'loading' ? '...' : 'Profile Picture'}</button>
                                 </div>
-                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-{/* Fix: Added non-null assertion `!` to url property as TypeScript was failing to infer its existence after the check. */}
-                                     {logoVariations.white?.url && <img src={logoVariations.white.url!} className="h-16 w-16 object-contain rounded-md bg-gray-800 p-1"/>}
-{/* Fix: Added non-null assertion `!` to url property as TypeScript was failing to infer its existence after the check. */}
-                                     {logoVariations.profile_picture?.url && <img src={logoVariations.profile_picture.url!} className="h-16 w-16 object-contain rounded-full"/>}
+                                 <div className="flex items-start gap-2 mt-2">
+                                     {logoVariations.white?.url && (
+                                        <div className="relative group">
+                                            <img src={logoVariations.white.url} alt="White logo variation" className="h-16 w-16 object-contain rounded-md bg-gray-800 p-1"/>
+                                            <button onClick={() => downloadImage(logoVariations.white.url!, 'logo_white.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download white logo">
+                                                <DownloadIcon className="h-4 w-4"/>
+                                            </button>
+                                        </div>
+                                    )}
+                                    {logoVariations.profile_picture?.url && (
+                                        <div className="relative group">
+                                            <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-16 w-16 object-contain rounded-full"/>
+                                            <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
+                                                <DownloadIcon className="h-4 w-4"/>
+                                            </button>
+                                        </div>
+                                    )}
                                  </div>
                             </div>
                             {/* Palette & Typography */}
@@ -378,15 +438,37 @@ const App: React.FC = () => {
                             <div>
                                 <h3 className="text-base font-semibold text-teal-300 mb-2">Mockups</h3>
                                 <div className="flex flex-wrap gap-2 mb-2">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{generatedMockups[type]?.status === 'loading' ? '...' : type}</button>)}</div>
-{/* Fix: Proactively added non-null assertion `!` to mockup.url to prevent potential TypeScript errors, following the same pattern as the logo variations. */}
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">{Object.values(generatedMockups).filter(m => m.url).map((mockup, i) => <img key={i} src={mockup.url!} alt="Mockup" className="rounded-md object-cover"/>)}</div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {/* Fix: Cast the result of Object.entries to fix type inference issues. */}
+                                    {(Object.entries(generatedMockups) as [string, MockupState][])
+                                        .filter(([, m]) => m.status === 'success' && m.url)
+                                        .map(([key, mockup]) => (
+                                            <div key={key} className="relative group">
+                                                <img src={mockup.url!} alt={`${key} Mockup`} className="rounded-md object-cover"/>
+                                                <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(' ', '_')}.png`)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
+                                                    <DownloadIcon className="h-4 w-4"/>
+                                                </button>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
                             </div>
                             {/* Social Post */}
                             <div>
                                 <h3 className="text-base font-semibold text-teal-300 mb-2">Social Media</h3>
                                 {!socialPost && <button onClick={handleGenerateSocialPost} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md">Generate Launch Post</button>}
                                 {socialPost?.status === 'loading' && <p className="text-xs text-gray-400">Generating post...</p>}
-                                {socialPost?.status === 'success' && socialPost.image && <div className="flex gap-2 items-start"><img src={socialPost.image} className="w-1/3 rounded-md"/><p className="text-xs text-gray-300 p-2 bg-gray-800 rounded-md w-2/3">{socialPost.caption}</p></div>}
+                                {socialPost?.status === 'success' && socialPost.image && (
+                                    <div className="flex gap-2 items-start">
+                                        <div className="relative group w-1/3">
+                                            <img src={socialPost.image} alt="Social media post" className="rounded-md"/>
+                                            <button onClick={() => downloadImage(socialPost.image, 'social_post_image.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download social post image">
+                                                <DownloadIcon className="h-4 w-4"/>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-gray-300 p-2 bg-gray-800 rounded-md w-2/3">{socialPost.caption}</p>
+                                    </div>
+                                )}
                             </div>
                             {/* Guidelines */}
                              <div>
