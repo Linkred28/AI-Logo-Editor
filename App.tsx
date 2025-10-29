@@ -16,6 +16,7 @@ import {
 } from './services/geminiService';
 
 type Mode = 'create' | 'edit';
+type Theme = 'light' | 'dark';
 type BrandKit = {
   colors: { hex: string }[];
   typography: { headingFont: string; bodyFont: string };
@@ -38,14 +39,24 @@ const SendIcon: React.FC<{className?: string}> = ({ className }) => ( <svg class
 const CheckIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> );
 const XIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg> );
 const RevertIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg> );
+const SunIcon: React.FC<{ className?: string }> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.95-4.243-1.59-1.591M3.75 12H6m4.243-4.95-1.59 1.591M12 12a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 0 0-9Z" /></svg> );
+const MoonIcon: React.FC<{ className?: string }> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg> );
 
 
 // --- LOADING SPINNERS ---
-const LoadingSpinner: React.FC<{text: string}> = ({ text }) => (
-  <div className="flex flex-col items-center justify-center space-y-4">
-    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-teal-400"></div>
-    <p className="text-teal-300">{text}</p>
-  </div>
+const PulsingSparklesLoader: React.FC<{text: string}> = ({ text }) => (
+    <div className="flex flex-col items-center justify-center space-y-6">
+        <SparklesIcon className="h-20 w-20 text-amber-500/40 dark:text-amber-500/40 animate-pulse" />
+        <p className="text-amber-700 dark:text-amber-400 font-medium tracking-wide">{text}</p>
+    </div>
+);
+
+// --- UI COMPONENTS ---
+const Section: React.FC<{title: string, children: React.ReactNode}> = ({ title, children }) => (
+    <div className="space-y-3">
+        <label className="text-sm font-semibold text-warm-gray-800 dark:text-slate-300 tracking-wide">{title}</label>
+        {children}
+    </div>
 );
 
 // --- DATA ---
@@ -63,6 +74,7 @@ const MOCKUP_TYPES = ['Business Card', 'Coffee Cup', 'T-Shirt', 'Storefront Sign
 
 const App: React.FC = () => {
   const [activeMode, setActiveMode] = useState<Mode>('create');
+  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.className as Theme));
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   
@@ -85,6 +97,7 @@ const App: React.FC = () => {
   
   // Brand Kit State
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
+  const [showBrandKit, setShowBrandKit] = useState(false);
   const [generatedMockups, setGeneratedMockups] = useState<Record<string, MockupState>>({});
   const [socialPost, setSocialPost] = useState<{status: Status, image?: string, caption?: string} | null>(null);
   const [brandGuidelines, setBrandGuidelines] = useState<{status: Status, dos?: string[], donts?: string[]} | null>(null);
@@ -99,9 +112,36 @@ const App: React.FC = () => {
   const [sloganGenerationStatus, setSloganGenerationStatus] = useState<Status>('idle');
   const [sloganGenerationError, setSloganGenerationError] = useState<string | null>(null);
 
-
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  // --- EFECTOS DE INTERACTIVIDAD IA ---
+  useEffect(() => {
+    // 1. Fondo Viviente: Controla la velocidad de la animación del fondo según el estado de la IA.
+    document.body.style.setProperty(
+        '--gradient-animation-duration',
+        status === 'loading' ? '3s' : '15s'
+    );
+  }, [status]);
+  
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [editHistory]);
+  
+  useEffect(() => {
+    if (brandKit) {
+        const timer = setTimeout(() => setShowBrandKit(true), 100);
+        return () => clearTimeout(timer);
+    } else {
+        setShowBrandKit(false);
+    }
+  }, [brandKit]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prevTheme => {
+        const newTheme = prevTheme === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        document.documentElement.className = newTheme;
+        return newTheme;
+    });
+  }, []);
 
   const handleReset = useCallback(() => {
     setStatus('idle');
@@ -339,24 +379,40 @@ const handleSelectSlogan = (selectedSlogan: string) => {
   
   const isCreateDisabled = status === 'loading' || !brandName || !industry;
   
+  const InputField = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} className="block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all" />
+  );
+  
+  const TextareaField = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+    <textarea {...props} className="block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all" />
+  );
+
+  const ThemeToggle = () => (
+    <button onClick={toggleTheme} className="absolute top-6 right-6 p-2 rounded-full text-warm-gray-700 dark:text-slate-400 hover:bg-warm-gray-200 dark:hover:bg-warm-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 dark:focus:ring-offset-warm-gray-950 transition-all duration-300" aria-label="Toggle theme">
+        {theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}
+    </button>
+  );
+
+
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-200 p-4 sm:p-6 lg:p-8">
-      <header className="text-center mb-10">
-        <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-300 to-cyan-500">
+    <div className="min-h-screen p-4 sm:p-6 lg:p-12">
+      <ThemeToggle />
+      <header className="text-center mb-12 animate-fadeInUp">
+        <h1 className="text-5xl sm:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-charcoal-900 via-charcoal-800 to-charcoal-900 dark:from-slate-100 dark:via-slate-300 dark:to-slate-100 pb-2">
           AI Brand Co-pilot
         </h1>
-        <p className="mt-2 text-lg text-gray-400">Your partner in crafting a unique brand identity from vision to reality.</p>
+        <p className="mt-2 text-lg text-warm-gray-700 dark:text-slate-400 max-w-2xl mx-auto">Your partner in crafting a unique brand identity from vision to reality.</p>
       </header>
 
-      <main className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+      <main className="max-w-8xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* --- INPUT PANEL --- */}
-        <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex flex-col space-y-6">
-            <div className="flex justify-between items-center border-b border-gray-700">
-                <div className="flex">
-                    <button onClick={() => handleModeChange('create')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'create' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Create</button>
-                    <button onClick={() => handleModeChange('edit')} className={`px-4 py-2 text-sm font-medium transition-colors ${activeMode === 'edit' ? 'border-b-2 border-teal-400 text-white' : 'text-gray-400 hover:text-white'}`}>Edit</button>
+        <div className="bg-white/60 dark:bg-warm-gray-900/60 backdrop-blur-xl rounded-3xl border border-warm-gray-200 dark:border-warm-gray-700/80 p-8 flex flex-col space-y-6">
+            <div className="flex justify-between items-center border-b border-warm-gray-200 dark:border-warm-gray-700 pb-5">
+                <div className="flex bg-warm-gray-100 dark:bg-warm-gray-800/80 p-1.5 rounded-xl space-x-1">
+                    <button onClick={() => handleModeChange('create')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${activeMode === 'create' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-500' : 'text-warm-gray-700 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white hover:bg-warm-gray-200 dark:hover:bg-warm-gray-700/50'}`}>Create</button>
+                    <button onClick={() => handleModeChange('edit')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${activeMode === 'edit' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-500' : 'text-warm-gray-700 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white hover:bg-warm-gray-200 dark:hover:bg-warm-gray-700/50'}`}>Edit</button>
                 </div>
-                 <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors" aria-label="Start Over">
+                 <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 text-sm text-warm-gray-700 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white hover:bg-warm-gray-200 dark:hover:bg-warm-gray-700/50 rounded-lg transition-colors duration-300" aria-label="Start Over">
                     <RefreshIcon className="h-4 w-4" />
                     Start Over
                 </button>
@@ -364,47 +420,42 @@ const handleSelectSlogan = (selectedSlogan: string) => {
 
             {/* CREATE MODE: GUIDED ASSISTANT */}
             {activeMode === 'create' && (
-                <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-gray-200">Intelligent Design Brief</h2>
-                    <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">1. Brand Name & Industry</label>
-                        <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-6">
+                    <h2 className="text-2xl font-semibold text-charcoal-900 dark:text-slate-100">Intelligent Design Brief</h2>
+                    <Section title="Brand Name & Industry">
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="relative">
-                                <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., The Daily Grind" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
-                                <button onClick={handleGenerateName} disabled={isGeneratingName || !industry} title="Suggest a name" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                <InputField type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., The Daily Grind" />
+                                <button onClick={handleGenerateName} disabled={isGeneratingName || !industry} title="Suggest a name" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition-colors duration-300"><WandIcon className="h-5 w-5"/></button>
                             </div>
-                           <input type="text" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Coffee Shop" className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
+                           <InputField type="text" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Coffee Shop" />
                         </div>
-                    </div>
-                    <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">2. Slogan (optional)</label>
+                    </Section>
+                    <Section title="Slogan (optional)">
                         <div className="relative">
-                           <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="e.g., Your daily dose of inspiration." className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"/>
-                           <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest slogans" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                           <InputField type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="e.g., Your daily dose of inspiration." />
+                           <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest slogans" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition-colors duration-300"><WandIcon className="h-5 w-5"/></button>
                         </div>
-                    </div>
-                     <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">3. Describe your vision (optional)</label>
-                        <textarea value={vision} onChange={(e) => setVision(e.target.value)} rows={3} placeholder="e.g., A mix of vintage engraving and modern tech..." className="block w-full rounded-md border-0 bg-gray-700/80 py-2 px-3 text-gray-200 shadow-sm ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-inset focus:ring-teal-500"></textarea>
-                    </div>
-                    <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">4. Designer Persona (optional)</label>
-                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            {DESIGNER_PERSONAS.map(p => <button key={p.name} onClick={() => setDesignerPersona(p.value)} className={`text-left p-2 text-xs font-medium rounded-md transition-all border ${designerPersona === p.value ? 'bg-teal-500 text-white border-teal-400' : 'bg-gray-700/80 text-gray-300 hover:bg-gray-600 border-gray-600'}`}>{p.name}</button>)}
+                    </Section>
+                     <Section title="Describe your vision (optional)">
+                        <TextareaField value={vision} onChange={(e) => setVision(e.target.value)} rows={3} placeholder="e.g., A mix of vintage engraving and modern tech..." />
+                    </Section>
+                    <Section title="Designer Persona (optional)">
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {DESIGNER_PERSONAS.map(p => <button key={p.name} onClick={() => setDesignerPersona(p.value)} className={`text-center p-3 text-xs font-semibold rounded-lg transition-all duration-300 border active:scale-95 transform hover:-translate-y-0.5 ${designerPersona === p.value ? 'bg-amber-100/50 dark:bg-amber-900/50 border-amber-500 text-amber-700 dark:text-amber-400 shadow-lg shadow-amber-500/10' : 'bg-warm-gray-100 dark:bg-warm-gray-800 text-warm-gray-800 dark:text-slate-300 hover:bg-warm-gray-200/60 dark:hover:bg-warm-gray-700/60 border-warm-gray-300 dark:border-warm-gray-700'}`}>{p.name}</button>)}
                         </div>
-                    </div>
-                    <div>
-                        <label className="text-sm font-medium text-gray-300 mb-1 block">5. Visual Inspiration (optional, up to 3)</label>
+                    </Section>
+                    <Section title="Visual Inspiration (optional, up to 3)">
                         <div className="flex items-center gap-4">
-                            <label htmlFor="inspiration-upload" className="cursor-pointer rounded-md bg-gray-700 px-3 py-2 text-sm font-semibold text-teal-400 hover:bg-gray-600">Upload Images</label>
+                            <label htmlFor="inspiration-upload" className="cursor-pointer rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-amber-700 dark:text-amber-500 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 transition-colors duration-300 active:scale-95">Upload Images</label>
                             <input id="inspiration-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleInspirationUpload} />
-                            <div className="flex gap-2">
-                                {inspirationPreviews.map((src, i) => <img key={i} src={src} className="h-10 w-10 rounded-md object-cover"/>)}
+                            <div className="flex gap-3">
+                                {inspirationPreviews.map((src, i) => <img key={i} src={src} className="h-14 w-14 rounded-lg object-cover border-2 border-warm-gray-300 dark:border-warm-gray-700 shadow-md"/>)}
                             </div>
                         </div>
-                    </div>
-                    <div className="pt-2">
-                        <button onClick={handleGuidedSubmit} disabled={isCreateDisabled} className="w-full flex items-center justify-center gap-2 rounded-md bg-teal-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:scale-100">Create New Logo <SparklesIcon className="h-5 w-5" /></button>
+                    </Section>
+                    <div className="pt-4">
+                        <button onClick={handleGuidedSubmit} disabled={isCreateDisabled} className={`w-full flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3.5 py-4 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 disabled:from-warm-gray-300 disabled:to-warm-gray-300 dark:disabled:from-warm-gray-700 dark:disabled:to-warm-gray-700 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-300 transform hover:-translate-y-1 active:scale-95 disabled:transform-none ${!isCreateDisabled ? 'shimmer-effect' : ''}`}>Create New Logo <SparklesIcon className="h-5 w-5" /></button>
                     </div>
                 </div>
             )}
@@ -413,30 +464,30 @@ const handleSelectSlogan = (selectedSlogan: string) => {
             {activeMode === 'edit' && (
                  <div className="flex flex-col h-full">
                     {!generatedImage ? (
-                        <div>
-                           <label className="text-lg font-semibold text-gray-300 mb-2 block">Upload a Logo to Edit</label>
-                           <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-600 px-6 py-10 hover:border-teal-400 transition-colors">
+                        <div className="flex flex-col items-center justify-center h-full text-center">
+                           <h2 className="text-2xl font-semibold text-charcoal-900 dark:text-slate-100 mb-4">Upload a Logo to Edit</h2>
+                           <div className="w-full mt-2 flex justify-center rounded-xl border-2 border-dashed border-warm-gray-300 dark:border-warm-gray-600 px-6 py-12 hover:border-amber-400 transition-colors duration-300 bg-warm-gray-100/50 dark:bg-warm-gray-800/20">
                                 <input id="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
                                 <div className="text-center">
-                                    <UploadIcon className="mx-auto h-12 w-12 text-gray-500" />
-                                    <div className="mt-4 flex text-sm text-gray-400"><label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-semibold text-teal-400 hover:text-teal-300"><span>Upload a file</span></label><p className="pl-1">or drag and drop</p></div>
-                                    <p className="text-xs text-gray-500">PNG, JPG, etc.</p>
+                                    <UploadIcon className="mx-auto h-12 w-12 text-warm-gray-700/60 dark:text-slate-500" />
+                                    <div className="mt-4 flex text-sm text-warm-gray-700/80 dark:text-slate-400"><label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-semibold text-amber-600 hover:text-amber-500"><span>Upload a file</span></label><p className="pl-1">or drag and drop</p></div>
+                                    <p className="text-xs text-warm-gray-700/60 dark:text-slate-500">PNG, JPG, etc.</p>
                                 </div>
                            </div>
                         </div>
                     ) : (
                         <div className="flex flex-col flex-grow min-h-0">
-                            <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                            <div className="mb-4 p-4 bg-warm-gray-100 dark:bg-warm-gray-950/40 rounded-xl border border-warm-gray-200 dark:border-warm-gray-800">
                                 <div className="relative">
-                                     <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Brand Name" className="w-full bg-transparent text-lg font-semibold text-white border-none focus:ring-0 p-1"/>
-                                      <button onClick={handleGenerateName} disabled={isGeneratingName} title="Suggest a name based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                     <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Brand Name" className="w-full bg-transparent text-xl font-semibold text-charcoal-900 dark:text-white border-none focus:ring-0 p-1 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500"/>
+                                      <button onClick={handleGenerateName} disabled={isGeneratingName} title="Suggest a name based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
                                 </div>
                                 <div className="relative">
-                                    <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Slogan" className="w-full bg-transparent text-sm text-gray-400 border-none focus:ring-0 p-1"/>
-                                    <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest a slogan based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-teal-400 hover:text-teal-300 disabled:text-gray-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                    <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Slogan" className="w-full bg-transparent text-sm text-warm-gray-700/80 dark:text-slate-400 border-none focus:ring-0 p-1 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500"/>
+                                    <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest a slogan based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
-                            <div className="flex-grow overflow-y-auto pr-2 space-y-4 mb-4">
+                            <div className="flex-grow overflow-y-auto pr-2 space-y-5 mb-4 -mr-2">
                                 {editHistory.map((entry, index) => {
                                     const isOriginal = index === 0;
                                     const altText = isOriginal ? 'Original Image' : `Edit step ${index}`;
@@ -444,41 +495,35 @@ const handleSelectSlogan = (selectedSlogan: string) => {
 
                                     return (
                                         <React.Fragment key={index}>
-                                            {/* User prompt bubble */}
+                                            {isOriginal && ( <p className="text-center text-xs text-warm-gray-700/60 dark:text-slate-500 tracking-wider font-semibold uppercase">Original Image</p> )}
                                             {!isOriginal && (
                                                 <div className="flex justify-end">
-                                                    <p className="bg-teal-800/50 text-white text-sm rounded-lg py-2 px-3 inline-block max-w-xs text-left">{entry.user}</p>
+                                                    <p className="bg-gradient-to-br from-amber-600 to-amber-700 text-white text-sm rounded-xl py-2.5 px-4 max-w-sm text-left shadow-lg">{entry.user}</p>
                                                 </div>
                                             )}
-
-                                            {/* AI image response */}
                                             <div className="flex justify-start">
-                                                <div className="relative group">
-                                                    <img src={entry.image} alt={altText} className="max-h-32 rounded-lg object-contain bg-gray-700/50 p-1" />
-                                                    
-                                                    <button onClick={() => downloadImage(entry.image, filename)} className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${altText}`} title="Download this version" >
-                                                        <DownloadIcon className="h-4 w-4"/>
-                                                    </button>
-                                                    
-                                                    {index < editHistory.length - 1 && (
-                                                        <button onClick={() => handleRevertToVersion(index)} className="absolute bottom-1 left-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Use this version and continue editing from here`} title="Use this version" >
-                                                            <RevertIcon className="h-4 w-4"/>
+                                                <div className="relative group bg-warm-gray-100 dark:bg-warm-gray-800 p-2.5 rounded-xl border border-warm-gray-200 dark:border-warm-gray-700/50">
+                                                    <img src={entry.image} alt={altText} className="max-h-36 rounded-lg object-contain" />
+                                                    <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                                        <button onClick={() => downloadImage(entry.image, filename)} className="bg-black/60 text-white p-1.5 rounded-full" aria-label={`Download ${altText}`} title="Download this version" >
+                                                            <DownloadIcon className="h-4 w-4"/>
                                                         </button>
-                                                    )}
+                                                        {index < editHistory.length - 1 && (
+                                                            <button onClick={() => handleRevertToVersion(index)} className="bg-black/60 text-white p-1.5 rounded-full" aria-label={`Use this version and continue editing from here`} title="Use this version" >
+                                                                <RevertIcon className="h-4 w-4"/>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            
-                                            {isOriginal && (
-                                                <p className="text-center text-sm text-gray-400 pt-1">Original Image</p>
-                                            )}
                                         </React.Fragment>
                                     )
                                 })}
                                 <div ref={chatEndRef} />
                             </div>
-                            <div className="relative">
-                                <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && status !== 'loading' && handleEditSubmit()} placeholder="e.g., Change the color to blue..." className="block w-full rounded-md border-0 bg-gray-700/80 py-3 pl-4 pr-12 text-gray-200 ring-1 ring-inset ring-gray-600 focus:ring-2 focus:ring-teal-500" disabled={status === 'loading'} />
-                                <button onClick={handleEditSubmit} disabled={status === 'loading' || !prompt} className="absolute inset-y-0 right-0 flex items-center pr-3 disabled:opacity-50 text-teal-400 hover:text-teal-300"> <SendIcon className="h-6 w-6"/> </button>
+                            <div className="relative mt-auto">
+                                <InputField type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && status !== 'loading' && handleEditSubmit()} placeholder="e.g., Change the color to blue..." className="py-3.5 pl-4 pr-14 disabled:opacity-60" disabled={status === 'loading'} />
+                                <button onClick={handleEditSubmit} disabled={status === 'loading' || !prompt} className="absolute inset-y-0 right-0 flex items-center pr-4 disabled:opacity-50 text-amber-600 hover:text-amber-500 transition-colors duration-300"> <SendIcon className="h-6 w-6"/> </button>
                             </div>
                         </div>
                     )}
@@ -487,48 +532,45 @@ const handleSelectSlogan = (selectedSlogan: string) => {
         </div>
 
         {/* --- OUTPUT PANEL --- */}
-        <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 flex flex-col items-center justify-center min-h-[500px] space-y-4">
-            {status === 'loading' && <LoadingSpinner text="Generating..." />}
+        <div className="bg-white/60 dark:bg-warm-gray-900/60 backdrop-blur-xl rounded-3xl border border-warm-gray-200 dark:border-warm-gray-700/80 p-8 flex flex-col items-center justify-center min-h-[600px] space-y-4">
+            {status === 'loading' && <PulsingSparklesLoader text={brandKit ? "Building Brand Kit..." : "Generating Logo..."} />}
             {status === 'error' && error && (
-                <div className="text-center text-red-400 space-y-4">
-                    <div><p className="font-semibold">Generation Failed</p><p className="text-sm mt-1">{error}</p></div>
-                    <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-500"><RefreshIcon className="h-5 w-5" />Start Over</button>
+                <div className="text-center text-red-500 dark:text-red-400 space-y-6 bg-red-500/10 dark:bg-red-900/20 p-8 rounded-2xl border border-red-500/20 dark:border-red-500/30 animate-fadeInUp">
+                    <div><p className="font-semibold text-lg text-red-700 dark:text-red-300">Generation Failed</p><p className="text-sm mt-2 max-w-sm">{error}</p></div>
+                    <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-md bg-warm-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-warm-gray-800 transition-colors duration-300"><RefreshIcon className="h-5 w-5" />Start Over</button>
                 </div>
             )}
             {status !== 'loading' && !generatedImage && (
-                <div className="text-center text-gray-500 space-y-2">
-                    <SparklesIcon className="h-16 w-16 mx-auto text-gray-600"/>
-                    <h3 className="text-lg font-medium">Your brand identity awaits</h3>
-                    <p className="mt-1 text-sm">Use the intelligent brief to get started.</p>
+                <div className="text-center text-warm-gray-700/60 dark:text-slate-500 space-y-3">
+                    <SparklesIcon className="h-20 w-20 mx-auto text-warm-gray-300/80 dark:text-warm-gray-600/70"/>
+                    <h3 className="text-xl font-semibold text-charcoal-800 dark:text-slate-300">Your brand identity awaits</h3>
+                    <p className="mt-1 text-base">Use the intelligent brief to get started.</p>
                 </div>
             )}
             {generatedImage && (
-                <div className="w-full text-center space-y-4 overflow-y-auto">
-                    <div className="relative group inline-block">
-                        <img src={generatedImage} alt="Generated logo" className="max-h-60 mx-auto rounded-md object-contain" />
-                        <button 
-                            onClick={() => downloadImage(generatedImage, 'logo.png')} 
-                            className="absolute top-2 right-2 bg-black/60 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" 
-                            aria-label="Download logo"
-                        >
+                <div className="w-full h-full text-center space-y-6 overflow-y-auto pr-2 -mr-4 animate-fadeInUp">
+                    <div className="relative group inline-block ai-reveal">
+                        <img src={generatedImage} alt="Generated logo" className="max-h-64 mx-auto rounded-lg object-contain bg-warm-gray-100 dark:bg-warm-gray-800/30 p-2" />
+                        <button onClick={() => downloadImage(generatedImage, 'logo.png')} className="absolute top-2 right-2 bg-black/60 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-label="Download logo">
                             <DownloadIcon className="h-5 w-5"/>
                         </button>
                     </div>
 
                     <div className="w-full pt-4 space-y-4">
-                        <div className="flex justify-center items-center gap-4">
-                            <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="inline-flex items-center gap-2 rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-500 disabled:bg-gray-700 transition-all">
+                        {logoVariations.transparent_bg?.status !== 'success' && (
+                            <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
                                 <WandIcon className="h-5 w-5" />
                                 {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : 'Remove Background'}
                             </button>
-                        </div>
+                        )}
                         {logoVariations.transparent_bg?.url && (
-                            <div className="flex flex-col items-center mt-2">
+                            <div className="flex flex-col items-center mt-2 animate-fadeInUp">
+                                <p className="text-sm font-medium text-charcoal-800 dark:text-slate-300 mb-2">Transparent Background</p>
                                 <div className="relative group">
-                                    <div className="h-24 w-24 rounded-md checkerboard p-1 flex items-center justify-center">
+                                    <div className={`h-28 w-28 rounded-lg p-1.5 flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700 ${theme === 'light' ? 'checkerboard-light' : 'checkerboard-dark'}`}>
                                         <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
                                     </div>
-                                    <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
+                                    <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
                                         <DownloadIcon className="h-4 w-4"/>
                                     </button>
                                 </div>
@@ -536,32 +578,35 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                         )}
                     </div>
 
-                    <div className="w-full border-t border-gray-700 my-4"></div>
-
-                    {!brandKit && (<button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 transition-all"><WandIcon className="h-5 w-5" />Build Brand Kit</button>)}
+                    {!brandKit && (
+                        <>
+                         <div className="w-full border-t border-warm-gray-200 dark:border-warm-gray-700/80 my-4"></div>
+                         <button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 active:scale-95"><WandIcon className="h-5 w-5" />Build Brand Kit</button>
+                        </>
+                    )}
                     
                     {brandKit && (
-                        <div className="text-left bg-gray-900/50 p-4 rounded-lg border border-gray-700 space-y-6">
+                        <div className={`text-left bg-warm-gray-100/50 dark:bg-warm-gray-950/40 p-6 rounded-2xl border border-warm-gray-200 dark:border-warm-gray-700/50 space-y-8 transition-opacity duration-700 ${showBrandKit ? 'opacity-100' : 'opacity-0'}`}>
                             {/* Downloads */}
-                            <div>
-                                <h3 className="text-base font-semibold text-teal-300 mb-2">Download Assets</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                     <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-xs bg-cyan-700 hover:bg-cyan-600 p-2 rounded-md flex items-center justify-center gap-1"><DownloadIcon className="h-4 w-4" />Color Logo</button>
-                                     <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.white?.status === 'loading' ? '...' : 'White Logo'}</button>
-                                     <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{logoVariations.profile_picture?.status === 'loading' ? '...' : 'Profile Picture'}</button>
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Download Assets</h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                     <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-sm font-semibold bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 p-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-300 active:scale-95"><DownloadIcon className="h-4 w-4" />Color Logo</button>
+                                     <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.white?.status === 'loading' ? 'Generating...' : 'White Logo'}</button>
+                                     <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.profile_picture?.status === 'loading' ? 'Generating...' : 'Profile Picture'}</button>
                                 </div>
-                                 <div className="flex items-start gap-2 mt-2">
+                                 <div className="flex items-start gap-4 mt-3">
                                      {logoVariations.white?.url && (
-                                        <div className="relative group">
-                                            <img src={logoVariations.white.url} alt="White logo variation" className="h-16 w-16 object-contain rounded-md bg-gray-800 p-1"/>
-                                            <button onClick={() => downloadImage(logoVariations.white.url!, 'logo_white.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download white logo">
+                                        <div className="relative group animate-fadeInUp">
+                                            <img src={logoVariations.white.url} alt="White logo variation" className="h-20 w-20 object-contain rounded-lg bg-warm-gray-800 p-1.5 border border-warm-gray-700"/>
+                                            <button onClick={() => downloadImage(logoVariations.white.url!, 'logo_white.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download white logo">
                                                 <DownloadIcon className="h-4 w-4"/>
                                             </button>
                                         </div>
                                     )}
                                     {logoVariations.profile_picture?.url && (
-                                        <div className="relative group">
-                                            <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-16 w-16 object-contain rounded-full"/>
+                                        <div className="relative group animate-fadeInUp">
+                                            <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-20 w-20 object-cover rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-700"/>
                                             <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
                                                 <DownloadIcon className="h-4 w-4"/>
                                             </button>
@@ -570,33 +615,32 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                  </div>
                             </div>
                             {/* Palette & Typography */}
-                            <div>
-                                <h3 className="text-base font-semibold text-teal-300 mb-2">Core Identity</h3>
-                                <div className="flex gap-2 mb-2">{brandKit.colors.map((c, i) => <div key={i} className="flex flex-col items-center gap-1"><div className="w-8 h-8 rounded-full border border-gray-600" style={{backgroundColor: c.hex}}></div><p className="text-xs text-gray-400">{c.hex}</p></div>)}</div>
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div><p className="text-gray-400">Heading</p><p className="text-sm text-white">{brandKit.typography.headingFont}</p></div>
-                                    <div><p className="text-gray-400">Body</p><p className="text-sm text-white">{brandKit.typography.bodyFont}</p></div>
+                             <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Core Identity</h3>
+                                <div className="flex gap-4 mb-3">{brandKit.colors.map((c, i) => <div key={i} className="flex flex-col items-center gap-2"><div className="w-12 h-12 rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-600 shadow-md transition-transform hover:scale-110" style={{backgroundColor: c.hex}} title={c.hex}></div><p className="text-xs text-warm-gray-700/80 dark:text-slate-400 font-mono">{c.hex.toUpperCase()}</p></div>)}</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg">
+                                    <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Heading</p><p className="text-2xl text-charcoal-900 dark:text-white font-semibold mt-1" style={{fontFamily: `'${brandKit.typography.headingFont}', sans-serif`}}>{brandKit.typography.headingFont}</p></div>
+                                    <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Body</p><p className="text-lg text-charcoal-900 dark:text-white mt-2" style={{fontFamily: `'${brandKit.typography.bodyFont}', sans-serif`}}>{brandKit.typography.bodyFont}</p></div>
                                 </div>
                             </div>
                             {/* Mockups */}
-                            <div>
-                                <h3 className="text-base font-semibold text-teal-300 mb-2">Mockups</h3>
-                                <div className="flex flex-wrap gap-2 mb-2">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md disabled:bg-gray-700">{generatedMockups[type]?.status === 'loading' ? '...' : type}</button>)}</div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                    {/* Fix: Explicitly type the 'mockup' object to resolve type inference issues with Object.entries. */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Mockups</h3>
+                                <div className="flex flex-wrap gap-2 mb-3">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-3 py-1.5 rounded-full disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{generatedMockups[type]?.status === 'loading' ? 'Generating...' : type}</button>)}</div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {Object.entries(generatedMockups).map(([key, mockup]: [string, MockupState]) => (
-                                        <div key={key} className="relative group aspect-square bg-gray-800/80 rounded-md flex items-center justify-center border border-gray-700/50" title={mockup.error}>
-                                            {mockup.status === 'loading' && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-teal-400"></div>}
+                                        <div key={key} className="relative group aspect-video bg-warm-gray-200 dark:bg-warm-gray-800 rounded-lg flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700/50" title={mockup.error}>
+                                            {mockup.status === 'loading' && <div className="w-full h-full bg-warm-gray-300/50 dark:bg-warm-gray-700/50 rounded-lg animate-pulse"></div>}
                                             {mockup.status === 'error' && (
                                                 <div className="text-center p-2">
-                                                    <p className="text-xs text-red-400">Failed</p>
-                                                    <button onClick={() => handleGenerateMockup(key)} className="mt-1 text-xs bg-red-500/50 hover:bg-red-500/80 p-1 rounded-md">Retry</button>
+                                                    <p className="text-xs text-red-500 dark:text-red-400 font-semibold">Failed</p>
+                                                    <button onClick={() => handleGenerateMockup(key)} className="mt-1 text-xs bg-red-500/20 dark:bg-red-800/70 hover:bg-red-500/30 dark:hover:bg-red-700/70 p-1.5 rounded-md transition-colors duration-300">Retry</button>
                                                 </div>
                                             )}
                                             {mockup.status === 'success' && mockup.url && (
                                                 <>
-                                                    <img src={mockup.url} alt={`${key} Mockup`} className="rounded-md object-cover w-full h-full"/>
-                                                    <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(/ /g, '_')}.png`)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
+                                                    <img src={mockup.url} alt={`${key} Mockup`} className="rounded-lg object-cover w-full h-full"/>
+                                                    <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(/ /g, '_')}.png`)} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
                                                         <DownloadIcon className="h-4 w-4"/>
                                                     </button>
                                                 </>
@@ -605,29 +649,30 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                     ))}
                                 </div>
                             </div>
-                            {/* Social Post */}
-                            <div>
-                                <h3 className="text-base font-semibold text-teal-300 mb-2">Social Media</h3>
-                                {!socialPost && <button onClick={handleGenerateSocialPost} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md">Generate Launch Post</button>}
-                                {socialPost?.status === 'loading' && <p className="text-xs text-gray-400">Generating post...</p>}
-                                {socialPost?.status === 'success' && socialPost.image && (
-                                    <div className="flex gap-2 items-start">
-                                        <div className="relative group w-1/3">
-                                            <img src={socialPost.image} alt="Social media post" className="rounded-md"/>
-                                            <button onClick={() => downloadImage(socialPost.image, 'social_post_image.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download social post image">
-                                                <DownloadIcon className="h-4 w-4"/>
-                                            </button>
+                            {/* Social Post & Guidelines */}
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Social Media</h3>
+                                    {!socialPost && <button onClick={handleGenerateSocialPost} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Launch Post</button>}
+                                    {socialPost?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating post...</p>}
+                                    {socialPost?.status === 'success' && socialPost.image && (
+                                        <div className="flex gap-4 items-start animate-fadeInUp">
+                                            <div className="relative group w-1/3 flex-shrink-0">
+                                                <img src={socialPost.image} alt="Social media post" className="rounded-lg aspect-square object-cover"/>
+                                                <button onClick={() => downloadImage(socialPost.image, 'social_post_image.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download social post image">
+                                                    <DownloadIcon className="h-4 w-4"/>
+                                                </button>
+                                            </div>
+                                            <p className="text-sm text-charcoal-800 dark:text-slate-300 p-3 bg-warm-gray-200/80 dark:bg-warm-gray-800/80 rounded-lg ">{socialPost.caption}</p>
                                         </div>
-                                        <p className="text-xs text-gray-300 p-2 bg-gray-800 rounded-md w-2/3">{socialPost.caption}</p>
-                                    </div>
-                                )}
-                            </div>
-                            {/* Guidelines */}
-                             <div>
-                                <h3 className="text-base font-semibold text-teal-300 mb-2">Brand Guidelines</h3>
-                                {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-xs bg-gray-600 hover:bg-gray-500 p-2 rounded-md">Generate Guidelines</button>}
-                                {brandGuidelines?.status === 'loading' && <p className="text-xs text-gray-400">Generating guidelines...</p>}
-                                {brandGuidelines?.status === 'success' && <div className="grid grid-cols-2 gap-4 text-xs"><div><h4 className="font-semibold text-green-400 mb-1">Dos</h4><ul className="list-disc list-inside space-y-1">{brandGuidelines.dos?.map((d,i)=><li key={i}>{d}</li>)}</ul></div><div><h4 className="font-semibold text-red-400 mb-1">Don'ts</h4><ul className="list-disc list-inside space-y-1">{brandGuidelines.donts?.map((d,i)=><li key={i}>{d}</li>)}</ul></div></div>}
+                                    )}
+                                </div>
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Brand Guidelines</h3>
+                                    {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Guidelines</button>}
+                                    {brandGuidelines?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating guidelines...</p>}
+                                    {brandGuidelines?.status === 'success' && <div className="grid grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg animate-fadeInUp"><div><h4 className="font-semibold text-green-600/80 dark:text-green-400/80 mb-1">Dos</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.dos?.map((d,i)=><li key={i}>{d}</li>)}</ul></div><div><h4 className="font-semibold text-red-600/80 dark:text-red-400/80 mb-1">Don'ts</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.donts?.map((d,i)=><li key={i}>{d}</li>)}</ul></div></div>}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -638,35 +683,35 @@ const handleSelectSlogan = (selectedSlogan: string) => {
       
       {/* --- SLOGAN SUGGESTIONS MODAL --- */}
       {isSloganModalOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setIsSloganModalOpen(false)}>
-            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setIsSloganModalOpen(false)}>
+            <div className="bg-warm-gray-100 dark:bg-warm-gray-900 border border-warm-gray-200 dark:border-warm-gray-700 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl shadow-amber-900/20 dark:shadow-amber-900/40 animate-fadeInUp" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-semibold text-teal-400">Slogan Suggestions</h2>
-                    <button onClick={() => setIsSloganModalOpen(false)} className="text-gray-400 hover:text-white"><XIcon className="h-6 w-6"/></button>
+                    <h2 className="text-xl font-semibold text-amber-700 dark:text-amber-500">Slogan Suggestions</h2>
+                    <button onClick={() => setIsSloganModalOpen(false)} className="text-warm-gray-700/80 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white transition-colors duration-300"><XIcon className="h-6 w-6"/></button>
                 </div>
 
                 {sloganGenerationStatus === 'loading' && (
-                    <div className="flex flex-col items-center justify-center p-8 space-y-2">
-                        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-400"></div>
-                        <p className="text-sm text-gray-300">Generating ideas...</p>
+                    <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+                        <p className="text-sm text-warm-gray-800 dark:text-slate-300">Generating ideas...</p>
                     </div>
                 )}
                 
                 {sloganGenerationStatus === 'error' && (
-                     <div className="text-center text-red-400 p-4 bg-red-900/20 rounded-lg">
-                        <p className="font-semibold">Generation Failed</p>
+                     <div className="text-center text-red-500 dark:text-red-400 p-6 bg-red-500/10 dark:bg-red-900/20 rounded-lg border border-red-500/20 dark:border-red-500/30">
+                        <p className="font-semibold text-red-700 dark:text-red-300">Generation Failed</p>
                         <p className="text-sm mt-1">{sloganGenerationError}</p>
-                        <button onClick={handleOpenSloganModal} className="mt-4 inline-flex items-center gap-2 rounded-md bg-gray-600 px-3 py-1 text-sm font-semibold text-white hover:bg-gray-500"><RefreshIcon className="h-4 w-4" />Retry</button>
+                        <button onClick={handleOpenSloganModal} className="mt-4 inline-flex items-center gap-2 rounded-md bg-warm-gray-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-warm-gray-800 transition-colors duration-300"><RefreshIcon className="h-4 w-4" />Retry</button>
                     </div>
                 )}
 
                 {sloganGenerationStatus === 'success' && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {sloganSuggestions.map((slogan, index) => (
                              <button 
                                 key={index} 
                                 onClick={() => handleSelectSlogan(slogan)}
-                                className="w-full text-left p-3 rounded-md bg-gray-700/80 hover:bg-teal-800/50 ring-1 ring-gray-600 hover:ring-teal-500 transition-all text-gray-200"
+                                className="w-full text-left p-4 rounded-lg bg-white/70 dark:bg-warm-gray-800/70 hover:bg-warm-gray-200/80 dark:hover:bg-warm-gray-700/50 border border-warm-gray-300 dark:border-warm-gray-700 hover:border-amber-500 dark:hover:border-amber-500 transition-all duration-300 text-charcoal-800 dark:text-slate-200"
                             >
                                 {slogan}
                             </button>
