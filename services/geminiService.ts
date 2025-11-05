@@ -8,6 +8,37 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
+const handleGeminiError = (error: unknown, context: string): never => {
+    console.error(`Error during ${context}:`, error);
+    if (error instanceof Error) {
+        // Check for rate limit / quota exceeded errors
+        if (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('rate limit')) {
+            let detailedMessage = "Please check your plan and billing details, or try again later.";
+            try {
+                // The error message from the SDK can be a string that includes a JSON object.
+                const jsonStartIndex = error.message.indexOf('{');
+                if (jsonStartIndex > -1) {
+                    const jsonString = error.message.substring(jsonStartIndex);
+                    const errorJson = JSON.parse(jsonString);
+                    if (errorJson?.error?.message) {
+                        detailedMessage = errorJson.error.message;
+                    }
+                }
+            } catch (e) {
+                // Parsing failed, use a default message but log the issue.
+                console.warn("Could not parse detailed error from API rate limit message.");
+            }
+            throw new Error(`API Rate Limit Exceeded: ${detailedMessage}`);
+        }
+        
+        // For other types of errors, just pass a contextualized message.
+        throw new Error(`Failed to generate ${context.replace(/_/g, ' ')}. ${error.message}`);
+    }
+    // Fallback for non-Error objects
+    throw new Error(`An unknown error occurred during ${context.replace(/_/g, ' ')}.`);
+};
+
+
 const handleImageGenerationResponse = (response: any): string => {
     if (response.promptFeedback?.blockReason) {
       throw new Error(`Request was blocked due to: ${response.promptFeedback.blockReason}. Please adjust your prompt.`);
@@ -48,14 +79,7 @@ const generateImageFromParts = async (parts: Part[]): Promise<string> => {
     });
     return handleImageGenerationResponse(response);
   } catch (error) {
-    console.error("Error generating image from parts:", error);
-    if (error instanceof Error) {
-        if (error.message.includes('RESOURCE_EXHAUSTED')) {
-             throw new Error("API rate limit exceeded. Please check your plan and billing details, or try again later.");
-        }
-        throw new Error(`Failed to generate image: ${error.message}`);
-    }
-    throw new Error("An unknown error occurred while generating the image.");
+    handleGeminiError(error, "image generation");
   }
 };
 
@@ -114,8 +138,7 @@ export const getInitialBrandKit = async (logoBase64: string) => {
             typography: JSON.parse(typographyResponse.text),
         };
     } catch (error) {
-        console.error("Error generating initial brand kit:", error);
-        throw new Error("Failed to generate color palette and typography.");
+        handleGeminiError(error, "initial brand kit");
     }
 };
 
@@ -202,58 +225,71 @@ export const generateLogoVariation = async (logoBase64: string, variationType: '
 export const generateSocialPost = async (logoBase64: string, brandName: string, vision: string) => {
     const pureBase64 = logoBase64.split(',')[1];
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
+    
+    try {
+        const [imageResponse, captionResponse] = await Promise.all([
+            generateImageFromParts([
+                imagePart,
+                { text: `Create an eye-catching social media announcement post graphic for a new brand called '${brandName}'. This is their logo. The post should be visually appealing and suitable for platforms like Instagram. The brand's vision is: '${vision}'.` }
+            ]),
+            ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `Write a short, exciting social media caption to announce the launch of a new brand called '${brandName}'. Their vision is: '${vision}'. Keep it under 280 characters.`
+            })
+        ]);
 
-    const [imageResponse, captionResponse] = await Promise.all([
-         generateImageFromParts([
-            imagePart,
-            { text: `Create an eye-catching social media announcement post graphic for a new brand called '${brandName}'. This is their logo. The post should be visually appealing and suitable for platforms like Instagram. The brand's vision is: '${vision}'.` }
-        ]),
-         ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Write a short, exciting social media caption to announce the launch of a new brand called '${brandName}'. Their vision is: '${vision}'. Keep it under 280 characters.`
-        })
-    ]);
-
-    return {
-        image: imageResponse,
-        caption: captionResponse.text,
-    };
+        return {
+            image: imageResponse,
+            caption: captionResponse.text,
+        };
+    } catch (error) {
+        handleGeminiError(error, "social post");
+    }
 };
 
 export const generateBrandGuidelines = async (logoBase64: string) => {
     const pureBase64 = logoBase64.split(',')[1];
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: {
-            parts: [
-                imagePart,
-                { text: "Based on this logo, generate a list of 2 simple 'dos' and 2 simple 'don'ts' for its usage. Return a JSON object with two keys: 'dos' and 'donts', each containing an array of strings. Example: {'dos': ['Do...'], 'donts': ['Don\\'t...']}" }
-            ]
-        },
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    dos: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    donts: { type: Type.ARRAY, items: { type: Type.STRING } },
+    const prompt = `
+    As a senior brand strategist with 15 years of experience, analyze the provided logo and generate a concise yet comprehensive brand guideline document. Your analysis must be deep, congruent, and clear, providing real value for a brand manual.
+    
+    Return a JSON object with the following structure and content:
+    
+    - "logoPhilosophy": A short paragraph (2-3 sentences) describing the core concept, feeling, and values the logo visually represents.
+    - "clearSpaceRule": A simple, actionable rule for the minimum empty space around the logo. Express it relative to a feature of the logo itself (e.g., "equal to the height of the main letterform 'X'").
+    - "minimumSize": A specific minimum size for digital use to ensure legibility (e.g., "32px width").
+    - "colorUsage": An array of 2-3 strings detailing best practices for using the brand colors with the logo.
+    - "logoMisuse": An array of 2-3 strings listing common incorrect applications to avoid (e.g., "Do not stretch or distort the logo," "Do not place on visually cluttered backgrounds").
+    - "toneOfVoice": An array of 3-4 keywords that describe the brand's communication style as suggested by the logo's design.
+    `;
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-pro",
+            contents: { parts: [imagePart, { text: prompt }] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        logoPhilosophy: { type: Type.STRING },
+                        clearSpaceRule: { type: Type.STRING },
+                        minimumSize: { type: Type.STRING },
+                        colorUsage: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        logoMisuse: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        toneOfVoice: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    },
+                    required: ['logoPhilosophy', 'clearSpaceRule', 'minimumSize', 'colorUsage', 'logoMisuse', 'toneOfVoice']
                 },
             },
-        },
-    });
-    return JSON.parse(response.text);
+        });
+        return JSON.parse(response.text);
+    } catch (error) {
+        handleGeminiError(error, "brand guidelines");
+    }
 };
 
 // --- BRANDING TEXT GENERATION ---
-const handleTextGenerationError = (error: unknown): never => {
-    console.error("Error during text generation:", error);
-    if (error instanceof Error && error.message.includes('RESOURCE_EXHAUSTED')) {
-        throw new Error("API rate limit exceeded. Please check your plan and billing details, or try again later.");
-    }
-    throw new Error("Failed to generate text suggestion.");
-}
-
 const generateText = async (prompt: string): Promise<string> => {
     try {
         const response = await ai.models.generateContent({
@@ -262,7 +298,7 @@ const generateText = async (prompt: string): Promise<string> => {
         });
         return response.text.trim().replace(/["']/g, ''); // Clean up quotes
     } catch (error) {
-        handleTextGenerationError(error);
+        handleGeminiError(error, "text suggestion");
     }
 };
 
@@ -294,7 +330,7 @@ export const generateSloganSuggestions = async (brandName: string, industry: str
         const result = JSON.parse(response.text);
         return result.slogans || [];
     } catch (error) {
-        handleTextGenerationError(error);
+        handleGeminiError(error, "slogan suggestions");
     }
 };
 
@@ -309,7 +345,7 @@ export const generateNameFromLogo = async (logoBase64: string) => {
         });
         return response.text.trim().replace(/["']/g, '');
     } catch (error) {
-        handleTextGenerationError(error);
+        handleGeminiError(error, "name from logo");
     }
 };
 
@@ -340,6 +376,6 @@ export const generateSloganSuggestionsFromLogo = async (logoBase64: string, bran
         const result = JSON.parse(response.text);
         return result.slogans || [];
     } catch (error) {
-        handleTextGenerationError(error);
+        handleGeminiError(error, "slogans from logo");
     }
 };

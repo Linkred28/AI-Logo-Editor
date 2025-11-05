@@ -26,6 +26,27 @@ type MockupState = {
   url?: string;
   error?: string;
 };
+type BrandGuidelinesState = {
+    status: Status;
+    error?: string;
+    logoPhilosophy?: string;
+    clearSpaceRule?: string;
+    minimumSize?: string;
+    colorUsage?: string[];
+    logoMisuse?: string[];
+    toneOfVoice?: string[];
+};
+type SocialPostState = {
+    status: Status;
+    image?: string;
+    caption?: string;
+    error?: string;
+};
+type LogoVariationState = {
+    status: Status;
+    url?: string;
+    error?: string;
+};
 
 
 // --- ICONS ---
@@ -40,7 +61,12 @@ const XIcon: React.FC<{className?: string}> = ({ className }) => ( <svg classNam
 const RevertIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg> );
 const SunIcon: React.FC<{ className?: string }> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.95-4.243-1.59-1.591M3.75 12H6m4.243-4.95-1.59 1.591M12 12a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 0 0-9Z" /></svg> );
 const MoonIcon: React.FC<{ className?: string }> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg> );
-
+const InfoIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg> );
+const ClearSpaceIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg> );
+const RulerIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m-10.5-1.5-2-2m-3 3-2-2m-3 3-2-2m1.5-4.5 2-2m3 3 2-2m3 3 2-2m1.5 4.5 2-2m3 3 2-2m3 3 2-2m-1.5-13.5-2-2m-3 3-2-2m-3 3-2-2m1.5 13.5 2-2m3 3 2-2m3 3 2-2" /></svg> );
+const TagsIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg> );
+const ThumbsUpIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.267 9.333 13.5a3.75 3.75 0 1 0 5.303-5.303l-3.333-3.333a3.75 3.75 0 0 0-5.303 5.303Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 13.5a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" /></svg> );
+const ThumbsDownIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M11.412 15.655 9.75 17.313a1.5 1.5 0 0 1-2.121 0l-2.25-2.25a1.5 1.5 0 0 1 0-2.121l9-9a1.5 1.5 0 0 1 2.121 0l2.25 2.25a1.5 1.5 0 0 1 0 2.121l-9 9Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12.75 12.75 15 15m-4.5-4.5 2.25 2.25" /></svg> );
 
 // --- LOADING SPINNERS ---
 const PulsingSparklesLoader: React.FC<{text: string}> = ({ text }) => (
@@ -92,6 +118,17 @@ const DESIGNER_PERSONAS = [
 ];
 const MOCKUP_TYPES = ['Business Card', 'Coffee Cup', 'T-Shirt', 'Storefront Sign', 'Social Media Profile', 'Website on Laptop', 'Tote Bag', 'Letterhead'];
 
+const GuidelineItem: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode; }> = ({ icon, title, children }) => (
+    <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 text-amber-600 dark:text-amber-500 mt-1">{icon}</div>
+        <div>
+            <h4 className="font-semibold text-charcoal-800 dark:text-slate-200">{title}</h4>
+            <div className="mt-1 text-sm text-warm-gray-800/90 dark:text-slate-300/90">{children}</div>
+        </div>
+    </div>
+);
+
+
 const App: React.FC = () => {
   const [activeMode, setActiveMode] = useState<Mode>('create');
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.className as Theme));
@@ -120,9 +157,9 @@ const App: React.FC = () => {
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
   const [showBrandKit, setShowBrandKit] = useState(false);
   const [generatedMockups, setGeneratedMockups] = useState<Record<string, MockupState>>({});
-  const [socialPost, setSocialPost] = useState<{status: Status, image?: string, caption?: string} | null>(null);
-  const [brandGuidelines, setBrandGuidelines] = useState<{status: Status, dos?: string[], donts?: string[]} | null>(null);
-  const [logoVariations, setLogoVariations] = useState<Record<string, {status: Status, url?: string}>>({});
+  const [socialPost, setSocialPost] = useState<SocialPostState | null>(null);
+  const [brandGuidelines, setBrandGuidelines] = useState<BrandGuidelinesState | null>(null);
+  const [logoVariations, setLogoVariations] = useState<Record<string, LogoVariationState>>({});
 
   // Mockup Personalization State
   const [mockupName, setMockupName] = useState('Aurea Carballo');
@@ -369,7 +406,8 @@ Follow these critical instructions:
         const url = await generateLogoVariation(generatedImage, variation);
         setLogoVariations(prev => ({ ...prev, [variation]: { status: 'success', url } }));
     } catch (e) {
-        setLogoVariations(prev => ({ ...prev, [variation]: { status: 'error' } }));
+        const message = e instanceof Error ? e.message : "Failed to generate variation.";
+        setLogoVariations(prev => ({ ...prev, [variation]: { status: 'error', error: message } }));
     }
   }
 
@@ -380,7 +418,8 @@ Follow these critical instructions:
         const post = await generateSocialPost(generatedImage, brandName, vision);
         setSocialPost({ status: 'success', ...post });
     } catch (e) {
-        setSocialPost({ status: 'error' });
+        const message = e instanceof Error ? e.message : "Failed to generate post.";
+        setSocialPost({ status: 'error', error: message });
     }
   }
   
@@ -391,7 +430,8 @@ Follow these critical instructions:
         const guidelines = await generateBrandGuidelines(generatedImage);
         setBrandGuidelines({ status: 'success', ...guidelines });
     } catch (e) {
-        setBrandGuidelines({ status: 'error' });
+        const message = e instanceof Error ? e.message : "Failed to generate guidelines.";
+        setBrandGuidelines({ status: 'error', error: message });
     }
   }
 
@@ -466,7 +506,8 @@ const handleSelectSlogan = (selectedSlogan: string) => {
     type => personalizableMockupTypes.has(type) && generatedMockups[type]?.status
   );
   const isUpdatingPersonalizedMockups = Object.entries(generatedMockups).some(
-    ([type, state]) => personalizableMockupTypes.has(type) && state.status === 'loading'
+    // FIX: Explicitly type the destructured arguments to resolve a type inference issue.
+    ([type, state]: [string, MockupState]) => personalizableMockupTypes.has(type) && state.status === 'loading'
   );
 
   return (
@@ -636,15 +677,15 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                             <div className="w-full pt-4 space-y-4">
                                 <div className="flex justify-center flex-wrap gap-3">
                                     {logoVariations.transparent_bg?.status !== 'success' && (
-                                        <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
+                                        <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} title={logoVariations.transparent_bg?.error} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
                                             <WandIcon className="h-5 w-5" />
-                                            {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : 'Remove Background'}
+                                            {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : logoVariations.transparent_bg?.status === 'error' ? 'Retry' : 'Remove Background'}
                                         </button>
                                     )}
                                     {logoVariations.profile_picture?.status !== 'success' && (
-                                        <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
+                                        <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} title={logoVariations.profile_picture?.error} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
                                             <WandIcon className="h-5 w-5" />
-                                            {logoVariations.profile_picture?.status === 'loading' ? 'Creating...' : 'Create Profile Picture'}
+                                            {logoVariations.profile_picture?.status === 'loading' ? 'Creating...' : logoVariations.profile_picture?.status === 'error' ? 'Retry' : 'Create Profile Picture'}
                                         </button>
                                     )}
                                 </div>
@@ -693,8 +734,8 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                         <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Download Assets</h3>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                             <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-sm font-semibold bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 p-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-300 active:scale-95"><DownloadIcon className="h-4 w-4" />Color Logo</button>
-                                            <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.white?.status === 'loading' ? 'Generating...' : 'White Logo'}</button>
-                                            <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.profile_picture?.status === 'loading' ? 'Generating...' : 'Profile Picture'}</button>
+                                            <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} title={logoVariations.white?.error} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.white?.status === 'loading' ? 'Generating...' : logoVariations.white?.status === 'error' ? 'Retry' : 'White Logo'}</button>
+                                            <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} title={logoVariations.profile_picture?.error} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.profile_picture?.status === 'loading' ? 'Generating...' : logoVariations.profile_picture?.status === 'error' ? 'Retry' : 'Profile Picture'}</button>
                                         </div>
                                         <div className="flex items-start gap-4 mt-3">
                                             {logoVariations.white?.url && (
@@ -781,6 +822,13 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                             <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Social Media</h3>
                                             {!socialPost && <button onClick={handleGenerateSocialPost} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Launch Post</button>}
                                             {socialPost?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating post...</p>}
+                                            {socialPost?.status === 'error' && (
+                                                <div className="text-sm text-red-600 dark:text-red-400 p-3 bg-red-500/10 rounded-lg space-y-2">
+                                                    <p className="font-semibold">Generation Failed</p>
+                                                    <p className="text-xs">{socialPost.error}</p>
+                                                    <button onClick={handleGenerateSocialPost} className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded">Retry</button>
+                                                </div>
+                                            )}
                                             {socialPost?.status === 'success' && socialPost.image && (
                                                 <div className="flex gap-4 items-start animate-fadeInUp">
                                                     <div className="relative group w-1/3 flex-shrink-0">
@@ -797,7 +845,50 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                             <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Brand Guidelines</h3>
                                             {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Guidelines</button>}
                                             {brandGuidelines?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating guidelines...</p>}
-                                            {brandGuidelines?.status === 'success' && <div className="grid grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg animate-fadeInUp"><div><h4 className="font-semibold text-green-600/80 dark:text-green-400/80 mb-1">Dos</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.dos?.map((d,i)=><li key={i}>{d}</li>)}</ul></div><div><h4 className="font-semibold text-red-600/80 dark:text-red-400/80 mb-1">Don'ts</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.donts?.map((d,i)=><li key={i}>{d}</li>)}</ul></div></div>}
+                                            {brandGuidelines?.status === 'error' && (
+                                                <div className="text-sm text-red-600 dark:text-red-400 p-3 bg-red-500/10 rounded-lg space-y-2">
+                                                    <p className="font-semibold">Generation Failed</p>
+                                                    <p className="text-xs">{brandGuidelines.error}</p>
+                                                    <button onClick={handleGenerateGuidelines} className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded">Retry</button>
+                                                </div>
+                                            )}
+                                            {brandGuidelines?.status === 'success' && brandGuidelines.logoPhilosophy && (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-6 rounded-lg animate-fadeInUp">
+                                                    <div className="sm:col-span-2">
+                                                      <GuidelineItem icon={<InfoIcon className="h-6 w-6"/>} title="Logo Philosophy">
+                                                          <p>{brandGuidelines.logoPhilosophy}</p>
+                                                      </GuidelineItem>
+                                                    </div>
+                                                    
+                                                    <GuidelineItem icon={<ClearSpaceIcon className="h-6 w-6"/>} title="Clear Space">
+                                                        <p>{brandGuidelines.clearSpaceRule}</p>
+                                                    </GuidelineItem>
+                                                    
+                                                    <GuidelineItem icon={<RulerIcon className="h-6 w-6"/>} title="Minimum Size">
+                                                        <p>{brandGuidelines.minimumSize}</p>
+                                                    </GuidelineItem>
+
+                                                    <div className="sm:col-span-2">
+                                                      <GuidelineItem icon={<TagsIcon className="h-6 w-6"/>} title="Tone of Voice">
+                                                          <div className="flex flex-wrap gap-2">
+                                                              {brandGuidelines.toneOfVoice?.map((tag, i) => (
+                                                                  <span key={i} className="text-xs font-medium bg-amber-200/60 dark:bg-amber-800/60 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-full">{tag}</span>
+                                                              ))}
+                                                          </div>
+                                                      </GuidelineItem>
+                                                    </div>
+
+                                                    <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/10 border border-green-500/20 dark:border-green-500/20">
+                                                        <h4 className="font-semibold text-green-600/90 dark:text-green-400/90 mb-2 flex items-center gap-2"><ThumbsUpIcon className="h-5 w-5" />Best Practices</h4>
+                                                        <ul className="list-disc list-inside space-y-1 text-sm text-charcoal-800 dark:text-slate-300">{brandGuidelines.colorUsage?.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                                                    </div>
+
+                                                    <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/10 border border-red-500/20 dark:border-red-500/20">
+                                                        <h4 className="font-semibold text-red-600/80 dark:text-red-400/80 mb-2 flex items-center gap-2"><ThumbsDownIcon className="h-5 w-5" />Common Misuses</h4>
+                                                        <ul className="list-disc list-inside space-y-1 text-sm text-charcoal-800 dark:text-slate-300">{brandGuidelines.logoMisuse?.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
