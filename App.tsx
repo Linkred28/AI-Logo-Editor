@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useCallback, ChangeEvent, KeyboardEvent, useRef, useEffect } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
 import { 
@@ -124,6 +126,13 @@ const App: React.FC = () => {
   const [socialPost, setSocialPost] = useState<{status: Status, image?: string, caption?: string} | null>(null);
   const [brandGuidelines, setBrandGuidelines] = useState<{status: Status, dos?: string[], donts?: string[]} | null>(null);
   const [logoVariations, setLogoVariations] = useState<Record<string, {status: Status, url?: string}>>({});
+
+  // Mockup Personalization State
+  const [mockupName, setMockupName] = useState('Jane Doe');
+  const [mockupTitle, setMockupTitle] = useState('Founder & CEO');
+  const [mockupPhone, setMockupPhone] = useState('+1 555 123 4567');
+  const [mockupEmail, setMockupEmail] = useState('jane.doe@example.com');
+  const [mockupWebsite, setMockupWebsite] = useState('example.com');
 
   // Text generation loading state
   const [isGeneratingName, setIsGeneratingName] = useState(false);
@@ -298,7 +307,14 @@ const App: React.FC = () => {
     if (!generatedImage) return;
     setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'loading' } }));
     try {
-        const url = await generateMockup(generatedImage, mockupType);
+        const personalizationData = {
+            name: mockupName,
+            title: mockupTitle,
+            phone: mockupPhone,
+            email: mockupEmail,
+            website: mockupWebsite,
+        };
+        const url = await generateMockup(generatedImage, mockupType, personalizationData);
         setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'success', url } }));
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : "Failed to generate mockup.";
@@ -630,6 +646,21 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                     <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Body</p><p className="text-lg text-charcoal-900 dark:text-white mt-2" style={{fontFamily: `'${brandKit.typography.bodyFont}', sans-serif`}}>{brandKit.typography.bodyFont}</p></div>
                                 </div>
                             </div>
+                            {/* Personalization Section */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Personalize Mockups</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <InputField type="text" placeholder="Full Name" value={mockupName} onChange={(e) => setMockupName(e.target.value)} />
+                                    <InputField type="text" placeholder="Title / Role" value={mockupTitle} onChange={(e) => setMockupTitle(e.target.value)} />
+                                    <InputField type="text" placeholder="Phone Number" value={mockupPhone} onChange={(e) => setMockupPhone(e.target.value)} />
+                                    <InputField type="email" placeholder="Email Address" value={mockupEmail} onChange={(e) => setMockupEmail(e.target.value)} />
+                                    <div className="md:col-span-2">
+                                        <InputField type="text" placeholder="Website URL" value={mockupWebsite} onChange={(e) => setMockupWebsite(e.target.value)} />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-warm-gray-700/80 dark:text-slate-400">This information will be used for relevant mockups like business cards and letterheads.</p>
+                            </div>
+
                             {/* Mockups */}
                             <div className="space-y-4">
                                 <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Mockups</h3>

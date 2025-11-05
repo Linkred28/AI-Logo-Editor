@@ -119,12 +119,20 @@ export const getInitialBrandKit = async (logoBase64: string) => {
     }
 };
 
-export const generateMockup = async (logoBase64: string, mockupType: string): Promise<string> => {
+type MockupPersonalizationData = {
+    name: string;
+    title: string;
+    phone: string;
+    email: string;
+    website: string;
+};
+
+export const generateMockup = async (logoBase64: string, mockupType: string, personalization: MockupPersonalizationData): Promise<string> => {
     const pureBase64 = logoBase64.split(',')[1];
     const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
 
     const mockupPrompts: Record<string, string> = {
-        'Business Card': 'Create a photorealistic mockup of a modern, professional business card featuring this logo. The card should be placed on a clean, complementary surface like a wooden desk or marble countertop.',
+        'Business Card': 'Create a photorealistic mockup of a modern, professional business card featuring this logo.',
         'Coffee Cup': 'Generate a realistic mockup of a white ceramic coffee cup with this logo elegantly printed on its side. The scene should have soft lighting and a cafe-like ambiance.',
         'T-Shirt': 'Create a mockup of this logo on a high-quality, plain-colored t-shirt (e.g., heather grey, black, or white). The photo should be of the t-shirt folded neatly or worn by a mannequin.',
         'Storefront Sign': 'Generate a photorealistic mockup of a modern storefront with this logo displayed as a 3D sign. The sign could be blade-style or backlit, on a brick or glass facade.',
@@ -133,12 +141,48 @@ export const generateMockup = async (logoBase64: string, mockupType: string): Pr
         'Tote Bag': 'Create a mockup of this logo printed on a canvas tote bag. The bag can be held by a person or hanging against a neutral, textured wall.',
         'Letterhead': 'Generate a mockup of an A4 or US Letter-sized letterhead with this logo placed elegantly in the top-left corner. The paper should have a subtle texture and be placed on a professional desk.',
     };
+    
+    const personalizableMockups = new Set(['Business Card', 'Letterhead']);
+    
+    let prompt = mockupPrompts[mockupType] || `Create a photorealistic mockup of a ${mockupType} featuring this logo. The background should be clean and professional, suitable for a brand presentation.`;
 
-    const prompt = mockupPrompts[mockupType] || `Create a photorealistic mockup of a ${mockupType} featuring this logo. The background should be clean and professional, suitable for a brand presentation.`;
+    if (personalizableMockups.has(mockupType)) {
+        let details = '';
+        if (mockupType === 'Business Card') {
+            details = ` The card should be placed on a clean, complementary surface like a wooden desk or marble countertop.
+**This is a text rendering task. The absolute highest priority is text accuracy.**
+You MUST render the following information onto the card.
+**CRITICAL:** The text below must be copied EXACTLY, character-for-character. Double-check your output to ensure there are no spelling errors or typos. Any deviation from the source text is a failure.
+
+--- BEGIN TEXT TO RENDER ---
+${personalization.name}
+${personalization.title}
+Phone: ${personalization.phone}
+Email: ${personalization.email}
+Website: ${personalization.website}
+--- END TEXT TO RENDER ---
+
+Render this text clearly and legibly in a professional layout on the card. Do not add any other contact information.`;
+        } else if (mockupType === 'Letterhead') {
+            details = ` The letterhead must include contact information, usually in the header or footer.
+**This is a text rendering task. The absolute highest priority is text accuracy.**
+You MUST render the following information onto the letterhead.
+**CRITICAL:** The text below must be copied EXACTLY, character-for-character. Double-check your output to ensure there are no spelling errors or typos. Any deviation from the source text is a failure.
+
+--- BEGIN TEXT TO RENDER ---
+Phone: ${personalization.phone} | Email: ${personalization.email} | Website: ${personalization.website}
+--- END TEXT TO RENDER ---
+
+Render this text clearly and professionally. Do not add any other contact information.`;
+        }
+        prompt += details;
+    }
+
     const textPart = { text: prompt };
     
     return generateImageFromParts([imagePart, textPart]);
 }
+
 
 export const generateLogoVariation = async (logoBase64: string, variationType: 'white' | 'profile_picture' | 'transparent_bg'): Promise<string> => {
     const pureBase64 = logoBase64.split(',')[1];
