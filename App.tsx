@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useCallback, ChangeEvent, KeyboardEvent, useRef, useEffect } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
 import { 
@@ -118,6 +114,7 @@ const App: React.FC = () => {
   // Edit Mode State
   const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
   const [editHistory, setEditHistory] = useState<{user: string, image: string}[]>([]);
+  const [isEditLogoFinalized, setIsEditLogoFinalized] = useState(false);
   
   // Brand Kit State
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
@@ -128,11 +125,11 @@ const App: React.FC = () => {
   const [logoVariations, setLogoVariations] = useState<Record<string, {status: Status, url?: string}>>({});
 
   // Mockup Personalization State
-  const [mockupName, setMockupName] = useState('Jane Doe');
-  const [mockupTitle, setMockupTitle] = useState('Founder & CEO');
+  const [mockupName, setMockupName] = useState('Aurea Carballo');
+  const [mockupTitle, setMockupTitle] = useState('Propietaria');
   const [mockupPhone, setMockupPhone] = useState('+1 555 123 4567');
-  const [mockupEmail, setMockupEmail] = useState('jane.doe@example.com');
-  const [mockupWebsite, setMockupWebsite] = useState('example.com');
+  const [mockupEmail, setMockupEmail] = useState('soul.gifts@gmail.com');
+  const [mockupWebsite, setMockupWebsite] = useState('soul.gifts.com.mx');
 
   // Text generation loading state
   const [isGeneratingName, setIsGeneratingName] = useState(false);
@@ -193,6 +190,7 @@ const App: React.FC = () => {
     setSocialPost(null);
     setBrandGuidelines(null);
     setLogoVariations({});
+    setIsEditLogoFinalized(false);
   }, []);
   
   const handleModeChange = useCallback((mode: Mode) => {
@@ -261,7 +259,7 @@ const App: React.FC = () => {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
       setStatus('error');
     }
-  }, [brandName, industry, vision, designerPersona, inspirationFiles, slogan]);
+  }, [brandName, industry, slogan, vision, designerPersona, inspirationFiles, inspirationPreviews]);
 
   const handleEditSubmit = useCallback(async () => {
     if (!prompt || !generatedImage || !originalImageFile) return;
@@ -269,8 +267,18 @@ const App: React.FC = () => {
     setPrompt('');
     setStatus('loading');
     setError(null);
+    setIsEditLogoFinalized(false);
     try {
-        const editInstruction = `Generate a new image by applying the following edit to the provided logo: '${currentPrompt}'. You are an expert logo designer. When asked to change text, you must PERFECTLY match the original font, color, 3D effects, texture, lighting, and perspective. Apply the edit precisely and do not alter any other part of the logo unless requested. The output must be the newly generated image with the edits applied.`;
+        const editInstruction = `You are an expert logo designer. Your task is to precisely modify the provided logo based on the user's request.
+
+User's request: '${currentPrompt}'
+
+Follow these critical instructions:
+1.  **Interpret the Request:** Analyze whether the user wants to change text, colors, style, or a combination.
+2.  **For Visual Edits (Colors, Style):** If the request is to change colors (e.g., 'to pastel colors', 'to gold and silver'), styles, or shapes, apply these changes creatively while maintaining the logo's core structure and recognizability.
+3.  **For Text Edits:** If the request involves changing text, it is CRITICAL to render the new text with 100% accuracy. The new text must also PERFECTLY match the original font, 3D effects, texture, lighting, and perspective.
+4.  **Preserve the Unchanged:** Do not alter any other part of the logo unless specifically requested. The final output must be only the newly generated image with the precise edits applied.`;
+
         const newImageBase64 = await editImageWithGemini( generatedImage, originalImageFile.type, editInstruction );
         setGeneratedImage(newImageBase64);
         setEditHistory(prev => [...prev, { user: currentPrompt, image: newImageBase64 }]);
@@ -287,7 +295,12 @@ const App: React.FC = () => {
 
     setGeneratedImage(versionToRestore.image);
     setEditHistory(editHistory.slice(0, index + 1));
+    setIsEditLogoFinalized(false);
   }, [editHistory]);
+
+  const handleFinalizeLogo = useCallback(() => {
+    setIsEditLogoFinalized(true);
+  }, []);
 
   const handleGenerateInitialBrandKit = useCallback(async () => {
     if (!generatedImage) return;
@@ -303,7 +316,7 @@ const App: React.FC = () => {
     }
   }, [generatedImage]);
 
-  const handleGenerateMockup = async (mockupType: string) => {
+  const handleGenerateMockup = useCallback(async (mockupType: string) => {
     if (!generatedImage) return;
     setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'loading' } }));
     try {
@@ -320,7 +333,30 @@ const App: React.FC = () => {
         const errorMessage = e instanceof Error ? e.message : "Failed to generate mockup.";
         setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'error', error: errorMessage } }));
     }
-  };
+  }, [generatedImage, mockupName, mockupTitle, mockupPhone, mockupEmail, mockupWebsite]);
+
+  // Automatically generate non-personalizable mockups when the brand kit is first created.
+  useEffect(() => {
+    const shouldGenerate = brandKit && 
+        !generatedMockups['Coffee Cup']?.status && 
+        !generatedMockups['T-Shirt']?.status;
+
+    if (shouldGenerate) {
+        handleGenerateMockup('Coffee Cup');
+        handleGenerateMockup('T-Shirt');
+    }
+  }, [brandKit, handleGenerateMockup, generatedMockups]);
+  
+  const handleUpdatePersonalizedMockups = useCallback(() => {
+    const personalizableTypes = new Set(['Business Card', 'Letterhead']);
+    Object.keys(generatedMockups).forEach(mockupType => {
+      // Only re-generate if it's a personalizable type AND it has already been generated (i.e., has a status)
+      if (personalizableTypes.has(mockupType) && generatedMockups[mockupType]?.status) {
+        handleGenerateMockup(mockupType);
+      }
+    });
+  }, [generatedMockups, handleGenerateMockup]);
+
 
   const handleGenerateLogoVariation = async (variation: 'white' | 'profile_picture' | 'transparent_bg') => {
     if (!generatedImage) return;
@@ -363,17 +399,21 @@ const App: React.FC = () => {
       if (activeMode === 'create') {
         if (!industry) {
             setError("Please enter an industry to generate a name.");
+            setIsGeneratingName(false);
             return;
         }
         result = await generateBrandName(industry, vision);
         setBrandName(result);
       } else { // edit mode
-        if (!generatedImage) return;
+        if (!generatedImage) {
+            setIsGeneratingName(false);
+            return;
+        }
         result = await generateNameFromLogo(generatedImage);
         setBrandName(result);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate name suggestion.');
+        setError(err instanceof Error ? err.message : 'Failed to generate name suggestion.');
     } finally {
       setIsGeneratingName(false);
     }
@@ -416,6 +456,14 @@ const handleSelectSlogan = (selectedSlogan: string) => {
   };
   
   const isCreateDisabled = status === 'loading' || !brandName || !industry;
+  
+  const personalizableMockupTypes = new Set(['Business Card', 'Letterhead']);
+  const hasGeneratedPersonalizableMockup = Object.keys(generatedMockups).some(
+    type => personalizableMockupTypes.has(type) && generatedMockups[type]?.status
+  );
+  const isUpdatingPersonalizedMockups = Object.entries(generatedMockups).some(
+    ([type, state]) => personalizableMockupTypes.has(type) && state.status === 'loading'
+  );
 
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-12">
@@ -579,139 +627,185 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                         </button>
                     </div>
 
-                    <div className="w-full pt-4 space-y-4">
-                        {logoVariations.transparent_bg?.status !== 'success' && (
-                            <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
-                                <WandIcon className="h-5 w-5" />
-                                {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : 'Remove Background'}
-                            </button>
-                        )}
-                        {logoVariations.transparent_bg?.url && (
-                            <div className="flex flex-col items-center mt-2 animate-fadeInUp">
-                                <p className="text-sm font-medium text-charcoal-800 dark:text-slate-300 mb-2">Transparent Background</p>
-                                <div className="relative group">
-                                    <div className={`h-28 w-28 rounded-lg p-1.5 flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700 ${theme === 'light' ? 'checkerboard-light' : 'checkerboard-dark'}`}>
-                                        <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
-                                    </div>
-                                    <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
-                                        <DownloadIcon className="h-4 w-4"/>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {!brandKit && (
+                    {(activeMode === 'create' || isEditLogoFinalized) ? (
                         <>
-                         <div className="w-full border-t border-warm-gray-200 dark:border-warm-gray-700/80 my-4"></div>
-                         <button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 active:scale-95"><WandIcon className="h-5 w-5" />Build Brand Kit</button>
-                        </>
-                    )}
-                    
-                    {brandKit && (
-                        <div className={`text-left bg-warm-gray-100/50 dark:bg-warm-gray-950/40 p-6 rounded-2xl border border-warm-gray-200 dark:border-warm-gray-700/50 space-y-8 transition-opacity duration-700 ${showBrandKit ? 'opacity-100' : 'opacity-0'}`}>
-                            {/* Downloads */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Download Assets</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                     <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-sm font-semibold bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 p-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-300 active:scale-95"><DownloadIcon className="h-4 w-4" />Color Logo</button>
-                                     <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.white?.status === 'loading' ? 'Generating...' : 'White Logo'}</button>
-                                     <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.profile_picture?.status === 'loading' ? 'Generating...' : 'Profile Picture'}</button>
-                                </div>
-                                 <div className="flex items-start gap-4 mt-3">
-                                     {logoVariations.white?.url && (
-                                        <div className="relative group animate-fadeInUp">
-                                            <img src={logoVariations.white.url} alt="White logo variation" className="h-20 w-20 object-contain rounded-lg bg-warm-gray-800 p-1.5 border border-warm-gray-700"/>
-                                            <button onClick={() => downloadImage(logoVariations.white.url!, 'logo_white.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download white logo">
-                                                <DownloadIcon className="h-4 w-4"/>
-                                            </button>
-                                        </div>
+                            <div className="w-full pt-4 space-y-4">
+                                <div className="flex justify-center flex-wrap gap-3">
+                                    {logoVariations.transparent_bg?.status !== 'success' && (
+                                        <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
+                                            <WandIcon className="h-5 w-5" />
+                                            {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : 'Remove Background'}
+                                        </button>
                                     )}
-                                    {logoVariations.profile_picture?.url && (
-                                        <div className="relative group animate-fadeInUp">
-                                            <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-20 w-20 object-cover rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-700"/>
-                                            <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
-                                                <DownloadIcon className="h-4 w-4"/>
-                                            </button>
-                                        </div>
+                                    {logoVariations.profile_picture?.status !== 'success' && (
+                                        <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
+                                            <WandIcon className="h-5 w-5" />
+                                            {logoVariations.profile_picture?.status === 'loading' ? 'Creating...' : 'Create Profile Picture'}
+                                        </button>
                                     )}
-                                 </div>
-                            </div>
-                            {/* Palette & Typography */}
-                             <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Core Identity</h3>
-                                <div className="flex gap-4 mb-3">{brandKit.colors.map((c, i) => <div key={i} className="flex flex-col items-center gap-2"><div className="w-12 h-12 rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-600 shadow-md transition-transform hover:scale-110" style={{backgroundColor: c.hex}} title={c.hex}></div><p className="text-xs text-warm-gray-700/80 dark:text-slate-400 font-mono">{c.hex.toUpperCase()}</p></div>)}</div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg">
-                                    <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Heading</p><p className="text-2xl text-charcoal-900 dark:text-white font-semibold mt-1" style={{fontFamily: `'${brandKit.typography.headingFont}', sans-serif`}}>{brandKit.typography.headingFont}</p></div>
-                                    <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Body</p><p className="text-lg text-charcoal-900 dark:text-white mt-2" style={{fontFamily: `'${brandKit.typography.bodyFont}', sans-serif`}}>{brandKit.typography.bodyFont}</p></div>
                                 </div>
-                            </div>
-                            {/* Personalization Section */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Personalize Mockups</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <InputField type="text" placeholder="Full Name" value={mockupName} onChange={(e) => setMockupName(e.target.value)} />
-                                    <InputField type="text" placeholder="Title / Role" value={mockupTitle} onChange={(e) => setMockupTitle(e.target.value)} />
-                                    <InputField type="text" placeholder="Phone Number" value={mockupPhone} onChange={(e) => setMockupPhone(e.target.value)} />
-                                    <InputField type="email" placeholder="Email Address" value={mockupEmail} onChange={(e) => setMockupEmail(e.target.value)} />
-                                    <div className="md:col-span-2">
-                                        <InputField type="text" placeholder="Website URL" value={mockupWebsite} onChange={(e) => setMockupWebsite(e.target.value)} />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-warm-gray-700/80 dark:text-slate-400">This information will be used for relevant mockups like business cards and letterheads.</p>
-                            </div>
 
-                            {/* Mockups */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Mockups</h3>
-                                <div className="flex flex-wrap gap-2 mb-3">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-3 py-1.5 rounded-full disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{generatedMockups[type]?.status === 'loading' ? 'Generating...' : type}</button>)}</div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {Object.entries(generatedMockups).map(([key, mockup]: [string, MockupState]) => (
-                                        <div key={key} className="relative group aspect-video bg-warm-gray-200 dark:bg-warm-gray-800 rounded-lg flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700/50" title={mockup.error}>
-                                            {mockup.status === 'loading' && <div className="w-full h-full bg-warm-gray-300/50 dark:bg-warm-gray-700/50 rounded-lg animate-pulse"></div>}
-                                            {mockup.status === 'error' && (
-                                                <div className="text-center p-2">
-                                                    <p className="text-xs text-red-500 dark:text-red-400 font-semibold">Failed</p>
-                                                    <button onClick={() => handleGenerateMockup(key)} className="mt-1 text-xs bg-red-500/20 dark:bg-red-800/70 hover:bg-red-500/30 dark:hover:bg-red-700/70 p-1.5 rounded-md transition-colors duration-300">Retry</button>
-                                                </div>
-                                            )}
-                                            {mockup.status === 'success' && mockup.url && (
-                                                <>
-                                                    <img src={mockup.url} alt={`${key} Mockup`} className="rounded-lg object-cover w-full h-full"/>
-                                                    <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(/ /g, '_')}.png`)} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
+                                {(logoVariations.transparent_bg?.url || logoVariations.profile_picture?.url) && (
+                                    <div className="flex justify-center items-start flex-wrap gap-6 pt-4">
+                                        {logoVariations.transparent_bg?.url && (
+                                            <div className="flex flex-col items-center animate-fadeInUp">
+                                                <p className="text-sm font-medium text-charcoal-800 dark:text-slate-300 mb-2">Transparent Background</p>
+                                                <div className="relative group">
+                                                    <div className={`h-28 w-28 rounded-lg p-1.5 flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700 ${theme === 'light' ? 'checkerboard-light' : 'checkerboard-dark'}`}>
+                                                        <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
+                                                    </div>
+                                                    <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
                                                         <DownloadIcon className="h-4 w-4"/>
                                                     </button>
-                                                </>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {logoVariations.profile_picture?.url && (
+                                            <div className="flex flex-col items-center animate-fadeInUp">
+                                                <p className="text-sm font-medium text-charcoal-800 dark:text-slate-300 mb-2">Profile Picture</p>
+                                                <div className="relative group">
+                                                    <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-28 w-28 object-cover rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-700"/>
+                                                    <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
+                                                        <DownloadIcon className="h-4 w-4"/>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {!brandKit && (
+                                <>
+                                <div className="w-full border-t border-warm-gray-200 dark:border-warm-gray-700/80 my-4"></div>
+                                <button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 active:scale-95"><WandIcon className="h-5 w-5" />Build Brand Kit</button>
+                                </>
+                            )}
+                            
+                            {brandKit && (
+                                <div className={`text-left bg-warm-gray-100/50 dark:bg-warm-gray-950/40 p-6 rounded-2xl border border-warm-gray-200 dark:border-warm-gray-700/50 space-y-8 transition-opacity duration-700 ${showBrandKit ? 'opacity-100' : 'opacity-0'}`}>
+                                    {/* Downloads */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Download Assets</h3>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-sm font-semibold bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 p-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-300 active:scale-95"><DownloadIcon className="h-4 w-4" />Color Logo</button>
+                                            <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.white?.status === 'loading' ? 'Generating...' : 'White Logo'}</button>
+                                            <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.profile_picture?.status === 'loading' ? 'Generating...' : 'Profile Picture'}</button>
+                                        </div>
+                                        <div className="flex items-start gap-4 mt-3">
+                                            {logoVariations.white?.url && (
+                                                <div className="relative group animate-fadeInUp">
+                                                    <img src={logoVariations.white.url} alt="White logo variation" className="h-20 w-20 object-contain rounded-lg bg-warm-gray-800 p-1.5 border border-warm-gray-700"/>
+                                                    <button onClick={() => downloadImage(logoVariations.white.url!, 'logo_white.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download white logo">
+                                                        <DownloadIcon className="h-4 w-4"/>
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {logoVariations.profile_picture?.url && (
+                                                <div className="relative group animate-fadeInUp">
+                                                    <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-20 w-20 object-cover rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-700"/>
+                                                    <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
+                                                        <DownloadIcon className="h-4 w-4"/>
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                            {/* Social Post & Guidelines */}
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Social Media</h3>
-                                    {!socialPost && <button onClick={handleGenerateSocialPost} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Launch Post</button>}
-                                    {socialPost?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating post...</p>}
-                                    {socialPost?.status === 'success' && socialPost.image && (
-                                        <div className="flex gap-4 items-start animate-fadeInUp">
-                                            <div className="relative group w-1/3 flex-shrink-0">
-                                                <img src={socialPost.image} alt="Social media post" className="rounded-lg aspect-square object-cover"/>
-                                                <button onClick={() => downloadImage(socialPost.image, 'social_post_image.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download social post image">
-                                                    <DownloadIcon className="h-4 w-4"/>
-                                                </button>
-                                            </div>
-                                            <p className="text-sm text-charcoal-800 dark:text-slate-300 p-3 bg-warm-gray-200/80 dark:bg-warm-gray-800/80 rounded-lg ">{socialPost.caption}</p>
+                                    </div>
+                                    {/* Palette & Typography */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Core Identity</h3>
+                                        <div className="flex gap-4 mb-3">{brandKit.colors.map((c, i) => <div key={i} className="flex flex-col items-center gap-2"><div className="w-12 h-12 rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-600 shadow-md transition-transform hover:scale-110" style={{backgroundColor: c.hex}} title={c.hex}></div><p className="text-xs text-warm-gray-700/80 dark:text-slate-400 font-mono">{c.hex.toUpperCase()}</p></div>)}</div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg">
+                                            <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Heading</p><p className="text-2xl text-charcoal-900 dark:text-white font-semibold mt-1" style={{fontFamily: `'${brandKit.typography.headingFont}', sans-serif`}}>{brandKit.typography.headingFont}</p></div>
+                                            <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Body</p><p className="text-lg text-charcoal-900 dark:text-white mt-2" style={{fontFamily: `'${brandKit.typography.bodyFont}', sans-serif`}}>{brandKit.typography.bodyFont}</p></div>
                                         </div>
-                                    )}
+                                    </div>
+                                    {/* Personalization Section */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Personalize Mockups</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <InputField type="text" placeholder="Full Name" value={mockupName} onChange={(e) => setMockupName(e.target.value)} />
+                                            <InputField type="text" placeholder="Title / Role" value={mockupTitle} onChange={(e) => setMockupTitle(e.target.value)} />
+                                            <InputField type="text" placeholder="Phone Number" value={mockupPhone} onChange={(e) => setMockupPhone(e.target.value)} />
+                                            <InputField type="email" placeholder="Email Address" value={mockupEmail} onChange={(e) => setMockupEmail(e.target.value)} />
+                                            <div className="md:col-span-2">
+                                                <InputField type="text" placeholder="Website URL" value={mockupWebsite} onChange={(e) => setMockupWebsite(e.target.value)} />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                                            <p className="text-xs text-warm-gray-700/80 dark:text-slate-400 flex-grow">This information will be used for relevant mockups like business cards and letterheads.</p>
+                                            <button 
+                                                onClick={handleUpdatePersonalizedMockups}
+                                                disabled={!hasGeneratedPersonalizableMockup || isUpdatingPersonalizedMockups}
+                                                className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 px-4 py-2.5 text-sm font-semibold transition-all duration-300 active:scale-95 disabled:bg-warm-gray-200 dark:disabled:bg-warm-gray-700/50 disabled:text-warm-gray-700/60 dark:disabled:text-slate-500 disabled:cursor-not-allowed disabled:scale-100"
+                                            >
+                                                <RefreshIcon className={`h-4 w-4 ${isUpdatingPersonalizedMockups ? 'animate-spin' : ''}`} />
+                                                {isUpdatingPersonalizedMockups ? 'Updating...' : 'Update Mockups'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Mockups */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Mockups</h3>
+                                        <div className="flex flex-wrap gap-2 mb-3">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-3 py-1.5 rounded-full disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{generatedMockups[type]?.status === 'loading' ? 'Generating...' : type}</button>)}</div>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {Object.entries(generatedMockups).map(([key, mockup]: [string, MockupState]) => (
+                                                <div key={key} className="relative group aspect-video bg-warm-gray-200 dark:bg-warm-gray-800 rounded-lg flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700/50" title={mockup.error}>
+                                                    {mockup.status === 'loading' && <div className="w-full h-full bg-warm-gray-300/50 dark:bg-warm-gray-700/50 rounded-lg animate-pulse"></div>}
+                                                    {mockup.status === 'error' && (
+                                                        <div className="text-center p-2">
+                                                            <p className="text-xs text-red-500 dark:text-red-400 font-semibold">Failed</p>
+                                                            <button onClick={() => handleGenerateMockup(key)} className="mt-1 text-xs bg-red-500/20 dark:bg-red-800/70 hover:bg-red-500/30 dark:hover:bg-red-700/70 p-1.5 rounded-md transition-colors duration-300">Retry</button>
+                                                        </div>
+                                                    )}
+                                                    {mockup.status === 'success' && mockup.url && (
+                                                        <>
+                                                            <img src={mockup.url} alt={`${key} Mockup`} className="rounded-lg object-cover w-full h-full"/>
+                                                            <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(/ /g, '_')}.png`)} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
+                                                                <DownloadIcon className="h-4 w-4"/>
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {/* Social Post & Guidelines */}
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Social Media</h3>
+                                            {!socialPost && <button onClick={handleGenerateSocialPost} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Launch Post</button>}
+                                            {socialPost?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating post...</p>}
+                                            {socialPost?.status === 'success' && socialPost.image && (
+                                                <div className="flex gap-4 items-start animate-fadeInUp">
+                                                    <div className="relative group w-1/3 flex-shrink-0">
+                                                        <img src={socialPost.image} alt="Social media post" className="rounded-lg aspect-square object-cover"/>
+                                                        <button onClick={() => downloadImage(socialPost.image, 'social_post_image.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download social post image">
+                                                            <DownloadIcon className="h-4 w-4"/>
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-sm text-charcoal-800 dark:text-slate-300 p-3 bg-warm-gray-200/80 dark:bg-warm-gray-800/80 rounded-lg ">{socialPost.caption}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="space-y-4">
+                                            <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Brand Guidelines</h3>
+                                            {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Guidelines</button>}
+                                            {brandGuidelines?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating guidelines...</p>}
+                                            {brandGuidelines?.status === 'success' && <div className="grid grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg animate-fadeInUp"><div><h4 className="font-semibold text-green-600/80 dark:text-green-400/80 mb-1">Dos</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.dos?.map((d,i)=><li key={i}>{d}</li>)}</ul></div><div><h4 className="font-semibold text-red-600/80 dark:text-red-400/80 mb-1">Don'ts</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.donts?.map((d,i)=><li key={i}>{d}</li>)}</ul></div></div>}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Brand Guidelines</h3>
-                                    {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Guidelines</button>}
-                                    {brandGuidelines?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating guidelines...</p>}
-                                    {brandGuidelines?.status === 'success' && <div className="grid grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg animate-fadeInUp"><div><h4 className="font-semibold text-green-600/80 dark:text-green-400/80 mb-1">Dos</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.dos?.map((d,i)=><li key={i}>{d}</li>)}</ul></div><div><h4 className="font-semibold text-red-600/80 dark:text-red-400/80 mb-1">Don'ts</h4><ul className="list-disc list-inside space-y-1 text-charcoal-800 dark:text-slate-300">{brandGuidelines.donts?.map((d,i)=><li key={i}>{d}</li>)}</ul></div></div>}
-                                </div>
-                            </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="w-full pt-6 text-center animate-fadeInUp">
+                            <p className="mb-4 text-sm text-warm-gray-700 dark:text-slate-400">Iterate on your logo using the chat on the left.<br/>When you're happy with the result, continue to the brand kit.</p>
+                            <button onClick={handleFinalizeLogo} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 active:scale-95">
+                                <CheckIcon className="h-5 w-5" />
+                                Finalize Logo & Build Brand Kit
+                            </button>
                         </div>
                     )}
                 </div>
@@ -739,6 +833,7 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                      <div className="text-center text-red-500 dark:text-red-400 p-6 bg-red-500/10 dark:bg-red-900/20 rounded-lg border border-red-500/20 dark:border-red-500/30">
                         <p className="font-semibold text-red-700 dark:text-red-300">Generation Failed</p>
                         <p className="text-sm mt-1">{sloganGenerationError}</p>
+
                         <button onClick={handleOpenSloganModal} className="mt-4 inline-flex items-center gap-2 rounded-md bg-warm-gray-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-warm-gray-800 transition-colors duration-300"><RefreshIcon className="h-4 w-4" />Retry</button>
                     </div>
                 )}
