@@ -236,7 +236,7 @@ const App: React.FC = () => {
 
   const handleGuidedSubmit = useCallback(async () => {
     let fullPrompt = `A professional, high-quality logo for a brand named '${brandName}' in the ${industry} industry.`;
-    if (slogan) fullPrompt += ` Their slogan is "${slogan}".`;
+    if (slogan) fullPrompt += ` The logo should creatively incorporate the slogan: "${slogan}". The brand name '${brandName}' should not be repeated within the slogan text itself.`;
     if (vision) fullPrompt += ` The brand's vision is: "${vision}".`;
     if (designerPersona) fullPrompt += ` The desired style is ${designerPersona}`;
     if (inspirationPreviews.length > 0) fullPrompt += ` Draw inspiration from the provided images for mood, color, and style.`;
@@ -255,6 +255,7 @@ const App: React.FC = () => {
       const newImageBase64 = await createImageWithGemini(fullPrompt, imageAssets);
       setGeneratedImage(newImageBase64);
       setStatus('success');
+
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
       setStatus('error');
@@ -262,24 +263,27 @@ const App: React.FC = () => {
   }, [brandName, industry, slogan, vision, designerPersona, inspirationFiles, inspirationPreviews]);
 
   const handleEditSubmit = useCallback(async () => {
-    if (!prompt || !generatedImage || !originalImageFile) return;
+    if (!prompt || !generatedImage) return;
     const currentPrompt = prompt;
     setPrompt('');
     setStatus('loading');
     setError(null);
     setIsEditLogoFinalized(false);
     try {
+        const mimeType = (originalImageFile?.type) || (generatedImage.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/)?.[1]) || 'image/png';
+        
         const editInstruction = `You are an expert logo designer. Your task is to precisely modify the provided logo based on the user's request.
 
 User's request: '${currentPrompt}'
 
 Follow these critical instructions:
 1.  **Interpret the Request:** Analyze whether the user wants to change text, colors, style, or a combination.
-2.  **For Visual Edits (Colors, Style):** If the request is to change colors (e.g., 'to pastel colors', 'to gold and silver'), styles, or shapes, apply these changes creatively while maintaining the logo's core structure and recognizability.
+2.  **For Visual Edits (Colors, Style):** If the request is to change colors, styles, or shapes, apply these changes creatively while maintaining the logo's core structure and recognizability.
+    *   **Style Keywords:** When a style like 'vintage', 'futuristic', or 'minimalist' is requested, apply it thoughtfully. For 'vintage,' consider adding subtle textures, using a slightly desaturated color palette, or referencing classic design elements. For 'gold and silver,' apply metallic textures and lighting effects realistically. The goal is a tasteful and cohesive stylistic transformation.
 3.  **For Text Edits:** If the request involves changing text, it is CRITICAL to render the new text with 100% accuracy. The new text must also PERFECTLY match the original font, 3D effects, texture, lighting, and perspective.
 4.  **Preserve the Unchanged:** Do not alter any other part of the logo unless specifically requested. The final output must be only the newly generated image with the precise edits applied.`;
 
-        const newImageBase64 = await editImageWithGemini( generatedImage, originalImageFile.type, editInstruction );
+        const newImageBase64 = await editImageWithGemini( generatedImage, mimeType, editInstruction );
         setGeneratedImage(newImageBase64);
         setEditHistory(prev => [...prev, { user: currentPrompt, image: newImageBase64 }]);
         setStatus('success');
@@ -287,7 +291,7 @@ Follow these critical instructions:
         setError(err instanceof Error ? err.message : "An unknown error occurred.");
         setStatus('error');
     }
-}, [prompt, generatedImage, originalImageFile]);
+}, [prompt, generatedImage, originalImageFile, setEditHistory]);
 
   const handleRevertToVersion = useCallback((index: number) => {
     const versionToRestore = editHistory[index];
@@ -566,7 +570,7 @@ const handleSelectSlogan = (selectedSlogan: string) => {
 
                                     return (
                                         <React.Fragment key={index}>
-                                            {isOriginal && ( <p className="text-center text-xs text-warm-gray-700/60 dark:text-slate-500 tracking-wider font-semibold uppercase">Original Image</p> )}
+                                            {isOriginal && ( <p className="text-center text-xs text-warm-gray-700/60 dark:text-slate-500 tracking-wider font-semibold uppercase">{entry.user}</p> )}
                                             {!isOriginal && (
                                                 <div className="flex justify-end">
                                                     <p className="bg-gradient-to-br from-amber-600 to-amber-700 text-white text-sm rounded-xl py-2.5 px-4 max-w-sm text-left shadow-lg">{entry.user}</p>
