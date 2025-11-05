@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, ChangeEvent, KeyboardEvent, useRef, useEffect } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
 import { 
@@ -58,6 +59,27 @@ const Section: React.FC<{title: string, children: React.ReactNode}> = ({ title, 
         {children}
     </div>
 );
+
+const InputField = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input
+      {...props}
+      className={`block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all ${className || ''}`}
+    />
+  );
+  
+const TextareaField = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+    <textarea
+      {...props}
+      className={`block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all ${className || ''}`}
+    />
+);
+
+const ThemeToggle: React.FC<{ theme: Theme; toggleTheme: () => void; }> = ({ theme, toggleTheme }) => (
+    <button onClick={toggleTheme} className="absolute top-6 right-6 p-2 rounded-full text-warm-gray-700 dark:text-slate-400 hover:bg-warm-gray-200 dark:hover:bg-warm-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 dark:focus:ring-offset-warm-gray-950 transition-all duration-300" aria-label="Toggle theme">
+        {theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}
+    </button>
+);
+
 
 // --- DATA ---
 const DESIGNER_PERSONAS = [
@@ -378,25 +400,10 @@ const handleSelectSlogan = (selectedSlogan: string) => {
   };
   
   const isCreateDisabled = status === 'loading' || !brandName || !industry;
-  
-  const InputField = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} className="block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all" />
-  );
-  
-  const TextareaField = (props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea {...props} className="block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all" />
-  );
-
-  const ThemeToggle = () => (
-    <button onClick={toggleTheme} className="absolute top-6 right-6 p-2 rounded-full text-warm-gray-700 dark:text-slate-400 hover:bg-warm-gray-200 dark:hover:bg-warm-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 dark:focus:ring-offset-warm-gray-950 transition-all duration-300" aria-label="Toggle theme">
-        {theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}
-    </button>
-  );
-
 
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-12">
-      <ThemeToggle />
+      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       <header className="text-center mb-12 animate-fadeInUp">
         <h1 className="text-5xl sm:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-charcoal-900 via-charcoal-800 to-charcoal-900 dark:from-slate-100 dark:via-slate-300 dark:to-slate-100 pb-2">
           AI Brand Co-pilot
@@ -477,14 +484,14 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                         </div>
                     ) : (
                         <div className="flex flex-col flex-grow min-h-0">
-                            <div className="mb-4 p-4 bg-warm-gray-100 dark:bg-warm-gray-950/40 rounded-xl border border-warm-gray-200 dark:border-warm-gray-800">
+                            <div className="mb-4 space-y-2">
                                 <div className="relative">
-                                     <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Brand Name" className="w-full bg-transparent text-xl font-semibold text-charcoal-900 dark:text-white border-none focus:ring-0 p-1 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500"/>
-                                      <button onClick={handleGenerateName} disabled={isGeneratingName} title="Suggest a name based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                     <InputField type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Brand Name" className="text-lg font-semibold pr-10"/>
+                                      <button onClick={handleGenerateName} disabled={isGeneratingName} title="Suggest a name based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
                                 </div>
                                 <div className="relative">
-                                    <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Slogan" className="w-full bg-transparent text-sm text-warm-gray-700/80 dark:text-slate-400 border-none focus:ring-0 p-1 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500"/>
-                                    <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest a slogan based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-2 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
+                                    <InputField type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Slogan (optional)" className="pr-10"/>
+                                    <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest a slogan based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                             <div className="flex-grow overflow-y-auto pr-2 space-y-5 mb-4 -mr-2">
@@ -522,7 +529,7 @@ const handleSelectSlogan = (selectedSlogan: string) => {
                                 <div ref={chatEndRef} />
                             </div>
                             <div className="relative mt-auto">
-                                <InputField type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && status !== 'loading' && handleEditSubmit()} placeholder="e.g., Change the color to blue..." className="py-3.5 pl-4 pr-14 disabled:opacity-60" disabled={status === 'loading'} />
+                                <TextareaField value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), status !== 'loading' && handleEditSubmit())} placeholder="e.g., Change the color to blue..." className="py-3.5 pl-4 pr-14 disabled:opacity-60 resize-none" rows={1} disabled={status === 'loading'} />
                                 <button onClick={handleEditSubmit} disabled={status === 'loading' || !prompt} className="absolute inset-y-0 right-0 flex items-center pr-4 disabled:opacity-50 text-amber-600 hover:text-amber-500 transition-colors duration-300"> <SendIcon className="h-6 w-6"/> </button>
                             </div>
                         </div>
