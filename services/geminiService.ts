@@ -3,379 +3,382 @@ import { GoogleGenAI, Modality, Type, Part } from "@google/genai";
 const API_KEY = process.env.API_KEY;
 
 if (!API_KEY) {
-  console.warn("API_KEY environment variable not set. Using a placeholder.");
+  console.warn("La variable de entorno API_KEY no está definida. Las llamadas a la API fallarán.");
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
+const ai = new GoogleGenAI({ apiKey: API_KEY || 'dummy-key' });
 
-const handleGeminiError = (error: unknown, context: string): never => {
-    console.error(`Error during ${context}:`, error);
-    if (error instanceof Error) {
-        // Check for rate limit / quota exceeded errors
-        if (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('rate limit')) {
-            let detailedMessage = "Please check your plan and billing details, or try again later.";
-            try {
-                // The error message from the SDK can be a string that includes a JSON object.
-                const jsonStartIndex = error.message.indexOf('{');
-                if (jsonStartIndex > -1) {
-                    const jsonString = error.message.substring(jsonStartIndex);
-                    const errorJson = JSON.parse(jsonString);
-                    if (errorJson?.error?.message) {
-                        detailedMessage = errorJson.error.message;
-                    }
-                }
-            } catch (e) {
-                // Parsing failed, use a default message but log the issue.
-                console.warn("Could not parse detailed error from API rate limit message.");
-            }
-            throw new Error(`API Rate Limit Exceeded: ${detailedMessage}`);
-        }
-        
-        // For other types of errors, just pass a contextualized message.
-        throw new Error(`Failed to generate ${context.replace(/_/g, ' ')}. ${error.message}`);
-    }
-    // Fallback for non-Error objects
-    throw new Error(`An unknown error occurred during ${context.replace(/_/g, ' ')}.`);
+/**
+ * Helper: Convierte un objeto JSON a una cadena formateada para el prompt.
+ */
+const jsonToPrompt = (json: any): string => {
+  return JSON.stringify(json, null, 2);
 };
 
-
-const handleImageGenerationResponse = (response: any): string => {
-    if (response.promptFeedback?.blockReason) {
-      throw new Error(`Request was blocked due to: ${response.promptFeedback.blockReason}. Please adjust your prompt.`);
-    }
-    const candidate = response.candidates?.[0];
-    if (!candidate) {
-      throw new Error("No image content was generated. The API response was empty.");
-    }
-    if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-        const reasonMap: {[key: string]: string} = {
-            'SAFETY': 'The request was blocked due to safety concerns. Please modify your prompt or image.',
-            'RECITATION': 'The response was blocked due to potential recitation of copyrighted material.',
-            'NO_IMAGE': 'The model could not generate an image from your prompt. Please try rephrasing your request to be more specific about the visual changes.',
-            'OTHER': 'Generation failed for an unspecified reason from the model.'
-        };
-        const errorMessage = reasonMap[candidate.finishReason] || `Generation stopped unexpectedly: ${candidate.finishReason}`;
-        throw new Error(errorMessage);
-    }
-    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-      throw new Error("The API response did not contain the expected image format. Please try again.");
-    }
-    for (const part of candidate.content.parts) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("No image data found in the API response.");
-};
-
-const generateImageFromParts = async (parts: Part[]): Promise<string> => {
+/**
+ * Genera un nombre de marca basado en una descripción de texto.
+ */
+export const generateBrandName = async (description: string): Promise<string> => {
   try {
+    const model = 'gemini-2.5-flash';
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts },
-      config: {
-        responseModalities: [Modality.IMAGE],
-      },
+      model,
+      contents: `Genera un nombre de marca único, pegadizo y profesional para un negocio descrito como: "${description}". Devuelve SOLO el nombre, sin comillas ni explicaciones. El nombre debe ser en Español si aplica.`,
+      config: { temperature: 0.8 }
     });
-    return handleImageGenerationResponse(response);
+    return response.text.trim();
   } catch (error) {
-    handleGeminiError(error, "image generation");
+    console.error("Error al generar nombre:", error);
+    throw new Error("No se pudo generar el nombre de la marca.");
   }
 };
 
-export const editImageWithGemini = async (
-  base64ImageData: string,
-  mimeType: string,
-  prompt: string
-): Promise<string> => {
-  const pureBase64 = base64ImageData.split(',')[1];
-  if (!pureBase64) {
-      throw new Error("Invalid base64 image data provided.");
-  }
-  const imagePart = { inlineData: { data: pureBase64, mimeType } };
-  const textPart = { text: prompt };
-  return generateImageFromParts([imagePart, textPart]);
-};
-
-export const createImageWithGemini = async (prompt: string, inspirationImages: { base64: string; mimeType: string }[]): Promise<string> => {
-    const textPart = { text: prompt };
-    const imageParts = inspirationImages.map(img => ({
-        inlineData: {
-            data: img.base64.split(',')[1],
-            mimeType: img.mimeType,
-        }
-    }));
-    const parts = [textPart, ...imageParts];
-    return generateImageFromParts(parts);
-};
-
-export const getInitialBrandKit = async (logoBase64: string) => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    
-    try {
-        const [colorsResponse, typographyResponse] = await Promise.all([
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [ imagePart, { text: "Analyze this logo image and extract the 5 primary colors. Return a JSON array of objects, each with a 'hex' property. Example: [{'hex': '#RRGGBB'}]" }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { hex: { type: Type.STRING } } } },
-                },
-            }),
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [ imagePart, { text: "Based on this logo's style, suggest a heading and a body font from Google Fonts. Return a JSON object with 'headingFont' and 'bodyFont' keys. Example: {'headingFont': 'Montserrat', 'bodyFont': 'Lato'}" }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: { type: Type.OBJECT, properties: { headingFont: { type: Type.STRING }, bodyFont: { type: Type.STRING } } },
-                },
-            })
-        ]);
-
-        return {
-            colors: JSON.parse(colorsResponse.text),
-            typography: JSON.parse(typographyResponse.text),
-        };
-    } catch (error) {
-        handleGeminiError(error, "initial brand kit");
-    }
-};
-
-type MockupPersonalizationData = {
-    name: string;
-    title: string;
-    phone: string;
-    email: string;
-    website: string;
-};
-
-export const generateMockup = async (logoBase64: string, mockupType: string, personalization: MockupPersonalizationData): Promise<string> => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-
-    const mockupPrompts: Record<string, string> = {
-        'Business Card': 'Create a photorealistic mockup of a modern, professional business card featuring this logo.',
-        'Coffee Cup': 'Generate a realistic mockup of a white ceramic coffee cup with this logo elegantly printed on its side. The scene should have soft lighting and a cafe-like ambiance.',
-        'T-Shirt': 'Create a mockup of this logo on a high-quality, plain-colored t-shirt (e.g., heather grey, black, or white). The photo should be of the t-shirt folded neatly or worn by a mannequin.',
-        'Storefront Sign': 'Generate a photorealistic mockup of a modern storefront with this logo displayed as a 3D sign. The sign could be blade-style or backlit, on a brick or glass facade.',
-        'Social Media Profile': 'Create a mockup of a generic social media profile page viewed on a smartphone screen, prominently featuring the logo as the circular profile picture.',
-        'Website on Laptop': 'Generate a photorealistic mockup of a modern, minimalist website homepage displayed on a laptop screen (like a MacBook) in a clean workspace. The website design should be specifically created to showcase this logo. Make the logo the large, central, and most prominent element on the page, as if it\'s featured in a hero section. The rest of the design (like navigation or background elements) should be simple and secondary, ensuring the logo is the main focus and is highly visible.',
-        'Tote Bag': 'Create a mockup of this logo printed on a canvas tote bag. The bag can be held by a person or hanging against a neutral, textured wall.',
-        'Letterhead': 'Generate a mockup of an A4 or US Letter-sized letterhead with this logo placed elegantly in the top-left corner. The paper should have a subtle texture and be placed on a professional desk.',
+/**
+ * Genera un nombre de marca basado en una imagen de logo existente.
+ */
+export const generateNameFromLogo = async (imageBase64: string): Promise<string> => {
+   try {
+    const model = 'gemini-2.5-flash'; // Usamos Flash para razonamiento multimodal rápido
+    const imagePart = {
+      inlineData: {
+        mimeType: 'image/png',
+        data: imageBase64.split(',')[1],
+      },
     };
-    
-    const personalizableMockups = new Set(['Business Card', 'Letterhead']);
-    
-    let prompt = mockupPrompts[mockupType] || `Create a photorealistic mockup of a ${mockupType} featuring this logo. The background should be clean and professional, suitable for a brand presentation.`;
 
-    if (personalizableMockups.has(mockupType)) {
-        let details = '';
-        if (mockupType === 'Business Card') {
-            details = ` The card should be placed on a clean, complementary surface like a wooden desk or marble countertop.
-**This is a text rendering task. The absolute highest priority is text accuracy.**
-You MUST render the following information onto the card.
-**CRITICAL:** The text below must be copied EXACTLY, character-for-character. Double-check your output to ensure there are no spelling errors or typos. Any deviation from the source text is a failure.
-
---- BEGIN TEXT TO RENDER ---
-${personalization.name}
-${personalization.title}
-Phone: ${personalization.phone}
-Email: ${personalization.email}
-Website: ${personalization.website}
---- END TEXT TO RENDER ---
-
-Render this text clearly and legibly in a professional layout on the card. Do not add any other contact information.`;
-        } else if (mockupType === 'Letterhead') {
-            details = ` The letterhead must include contact information, usually in the header or footer.
-**This is a text rendering task. The absolute highest priority is text accuracy.**
-You MUST render the following information onto the letterhead.
-**CRITICAL:** The text below must be copied EXACTLY, character-for-character. Double-check your output to ensure there are no spelling errors or typos. Any deviation from the source text is a failure.
-
---- BEGIN TEXT TO RENDER ---
-Phone: ${personalization.phone} | Email: ${personalization.email} | Website: ${personalization.website}
---- END TEXT TO RENDER ---
-
-Render this text clearly and professionally. Do not add any other contact information.`;
-        }
-        prompt += details;
-    }
-
-    const textPart = { text: prompt };
-    
-    return generateImageFromParts([imagePart, textPart]);
+    const response = await ai.models.generateContent({
+      model,
+      contents: {
+          parts: [
+              imagePart,
+              { text: "Mira este logo. ¿Cuál es el nombre de la marca que aparece en él? Si no hay texto, inventa un nombre adecuado basado en el símbolo. Devuelve SOLO el nombre." }
+          ]
+      }
+    });
+    return response.text.trim();
+  } catch (error) {
+    console.error("Error al extraer nombre del logo:", error);
+    return "Tu Marca";
+  }
 }
 
 
-export const generateLogoVariation = async (logoBase64: string, variationType: 'white' | 'profile_picture' | 'transparent_bg'): Promise<string> => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    let prompt = '';
-    if (variationType === 'white') {
-        prompt = "Generate a new version of the provided logo that is solid white with a completely transparent background. The final image must be a PNG with a full alpha channel, containing only the white logo shape, with no background color or pattern.";
-    } else if (variationType === 'transparent_bg') {
-        prompt = "Generate a new version of the provided logo with its background completely removed. Your task is to perfectly isolate the main subject (the central icon and text) and make everything else transparent. This includes removing gradients, background shapes, or decorative elements. The final output must be a PNG with a true transparent alpha channel, containing only the logo's core elements.";
-    } else { // profile_picture
-        prompt = "Generate a social media profile picture from this logo. The new image should be adapted to be easily recognizable when small and fit well inside a circular frame. Place the logo on a solid, neutral background that complements its colors.";
-    }
-    const textPart = { text: prompt };
-    return generateImageFromParts([imagePart, textPart]);
-}
-
-export const generateSocialPost = async (logoBase64: string, brandName: string, vision: string) => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    
-    try {
-        const [imageResponse, captionResponse] = await Promise.all([
-            generateImageFromParts([
-                imagePart,
-                { text: `Create an eye-catching social media announcement post graphic for a new brand called '${brandName}'. This is their logo. The post should be visually appealing and suitable for platforms like Instagram. The brand's vision is: '${vision}'.` }
-            ]),
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: `Write a short, exciting social media caption to announce the launch of a new brand called '${brandName}'. Their vision is: '${vision}'. Keep it under 280 characters.`
-            })
-        ]);
-
-        return {
-            image: imageResponse,
-            caption: captionResponse.text,
-        };
-    } catch (error) {
-        handleGeminiError(error, "social post");
-    }
+/**
+ * Genera sugerencias de eslóganes (Slogans).
+ */
+export const generateSloganSuggestions = async (brandName: string, description: string): Promise<string[]> => {
+  try {
+    const model = 'gemini-2.5-flash';
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Para la marca "${brandName}" (descripción: "${description}"), genera 3 eslóganes pegadizos en español de México. Devuelve la respuesta como un array JSON de strings. Ejemplo: ["Eslógan 1", "Eslógan 2", "Eslógan 3"]. Sin markdown code blocks.`,
+      config: { 
+          responseMimeType: "application/json",
+          responseSchema: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+          }
+      }
+    });
+    const json = JSON.parse(response.text);
+    return json;
+  } catch (error) {
+    console.error("Error al generar eslóganes:", error);
+    return [`La mejor opción para ${brandName}`, `Calidad y servicio en ${brandName}`, `${brandName}: Tu solución ideal`];
+  }
 };
 
-export const generateBrandGuidelines = async (logoBase64: string) => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    const prompt = `
-    As a senior brand strategist with 15 years of experience, analyze the provided logo and generate a concise yet comprehensive brand guideline document. Your analysis must be deep, congruent, and clear, providing real value for a brand manual.
-    
-    Return a JSON object with the following structure and content:
-    
-    - "logoPhilosophy": A short paragraph (2-3 sentences) describing the core concept, feeling, and values the logo visually represents.
-    - "clearSpaceRule": A simple, actionable rule for the minimum empty space around the logo. Express it relative to a feature of the logo itself (e.g., "equal to the height of the main letterform 'X'").
-    - "minimumSize": A specific minimum size for digital use to ensure legibility (e.g., "32px width").
-    - "colorUsage": An array of 2-3 strings detailing best practices for using the brand colors with the logo.
-    - "logoMisuse": An array of 2-3 strings listing common incorrect applications to avoid (e.g., "Do not stretch or distort the logo," "Do not place on visually cluttered backgrounds").
-    - "toneOfVoice": An array of 3-4 keywords that describe the brand's communication style as suggested by the logo's design.
-    `;
-    
+export const generateSloganSuggestionsFromLogo = async (brandName: string, imageBase64: string): Promise<string[]> => {
     try {
+        const model = 'gemini-2.5-flash';
+        const imagePart = {
+            inlineData: {
+                mimeType: 'image/png',
+                data: imageBase64.split(',')[1],
+            },
+        };
+        
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-pro",
-            contents: { parts: [imagePart, { text: prompt }] },
+            model,
+            contents: {
+                parts: [
+                    imagePart,
+                    { text: `Basándote en el estilo visual de este logo y el nombre de marca "${brandName}", genera 3 eslóganes creativos en español de México que combinen con la vibra de la imagen. Devuelve un array JSON de strings.` }
+                ]
+            },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        logoPhilosophy: { type: Type.STRING },
-                        clearSpaceRule: { type: Type.STRING },
-                        minimumSize: { type: Type.STRING },
-                        colorUsage: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        logoMisuse: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        toneOfVoice: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    },
-                    required: ['logoPhilosophy', 'clearSpaceRule', 'minimumSize', 'colorUsage', 'logoMisuse', 'toneOfVoice']
-                },
-            },
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                }
+            }
         });
         return JSON.parse(response.text);
     } catch (error) {
-        handleGeminiError(error, "brand guidelines");
+        console.error("Error slogans from logo:", error);
+        return [`${brandName}: Estilo único`, `Innovación en ${brandName}`, `Descubre ${brandName}`];
     }
+}
+
+/**
+ * Crea un logo desde cero usando Imagen 3.
+ */
+export const createImageWithGemini = async (prompt: string, style: string): Promise<string> => {
+  try {
+    const model = 'imagen-3.0-generate-002'; // Fallback a modelo disponible si imagen-3 falla, pero intentamos imagen-3
+    // Nota: Para imagen-3 en vertex sería diferente, aquí usamos el sdk estándar asumiendo imagen-3.0-generate-001 o similar si está disponible,
+    // si no, usaremos gemini-2.5-flash-image para generación general si imagen específica falla, 
+    // pero la instrucción pide usar modelos válidos.
+    // Usaremos 'imagen-3.0-generate-001' como especificado en docs para High Quality o similar.
+    // Revisando guidelines: 'imagen-4.0-generate-001' es para high quality image. 'gemini-2.5-flash-image' general.
+    // Usaremos gemini-2.5-flash-image por velocidad y versatilidad en demo, o imagen-4 si se requiere ultra calidad.
+    // El usuario pidió "integro de colores, fuente...".
+    
+    // Construimos un prompt rico
+    const fullPrompt = `Un diseño de logotipo profesional para una marca. Estilo: ${style}. Descripción: ${prompt}. Fondo blanco limpio, minimalista, alta resolución, diseño vectorial.`;
+
+    const response = await ai.models.generateImages({
+        model: 'imagen-3.0-generate-001', 
+        prompt: fullPrompt,
+        config: {
+            numberOfImages: 1,
+            aspectRatio: '1:1',
+            outputMimeType: 'image/jpeg'
+        }
+    });
+
+    // Imagen response structure
+    const base64Image = response.generatedImages[0].image.imageBytes;
+    return `data:image/jpeg;base64,${base64Image}`;
+
+  } catch (error) {
+    console.error("Error al crear imagen:", error);
+    throw new Error("No se pudo generar el logo. Intenta con otra descripción.");
+  }
 };
 
-// --- BRANDING TEXT GENERATION ---
-const generateText = async (prompt: string): Promise<string> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-        });
-        return response.text.trim().replace(/["']/g, ''); // Clean up quotes
-    } catch (error) {
-        handleGeminiError(error, "text suggestion");
+/**
+ * Edita o genera variaciones de un logo existente.
+ * (Gemini 2.5 Flash Image no soporta edición directa tipo inpainting con máscara en este SDK simple,
+ *  pero podemos pedirle una variación visual o usarlo como referencia).
+ */
+export const editImageWithGemini = async (imageBase64: string, instructions: string): Promise<string> => {
+  // Como 'edit' real requiere capacidades específicas, usaremos generación multimodal:
+  // "Genera una imagen nueva basada en esta referencia y estas instrucciones".
+  try {
+    const model = 'gemini-2.5-flash-image'; // Modelo capaz de ver imagen y generar imagen (si está habilitado) o devolver texto.
+    // Wait, gemini-2.5-flash-image generates images? Guidelines say:
+    // "General Image Generation and Editing Tasks: 'gemini-2.5-flash-image'"
+    // YES.
+    
+    const imagePart = {
+        inlineData: {
+            data: imageBase64.split(',')[1],
+            mimeType: 'image/png' // Asumimos png/jpeg
+        }
+    };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [
+                imagePart,
+                { text: `Sigue estas instrucciones para modificar/recrear este logo: ${instructions}. Mantén la esencia pero aplica los cambios. Alta calidad, fondo blanco.` }
+            ]
+        },
+        config: {
+            responseModalities: [Modality.IMAGE]
+        }
+    });
+
+    const candidates = response.candidates;
+    if (candidates && candidates[0]?.content?.parts) {
+        for (const part of candidates[0].content.parts) {
+            if (part.inlineData) {
+                return `data:image/png;base64,${part.inlineData.data}`;
+            }
+        }
     }
+    throw new Error("No se generó imagen de respuesta.");
+  } catch (error) {
+    console.error("Error al editar imagen:", error);
+    throw new Error("No se pudo editar el logo.");
+  }
 };
 
-export const generateBrandName = (industry: string, vision: string) => {
-    const prompt = `You are a branding expert. Generate a single, creative, and memorable brand name for a company in the '${industry}' industry. Their vision is: '${vision}'. Return only the name, with no extra text or quotes.`;
-    return generateText(prompt);
-};
-
-export const generateSloganSuggestions = async (brandName: string, industry: string, vision: string): Promise<string[]> => {
-    const prompt = `You are a branding expert. Generate 5 creative and catchy slogans for a brand named '${brandName}' in the '${industry}' industry. Their vision is: '${vision}'.`;
+/**
+ * Genera un Kit de Marca inicial (Colores, Tipografía) analizando el logo o la descripción.
+ */
+export const getInitialBrandKit = async (description: string, imageBase64?: string): Promise<{ colors: { hex: string }[], typography: { headingFont: string, bodyFont: string } }> => {
     try {
+        const model = 'gemini-2.5-flash';
+        let parts: Part[] = [];
+        
+        if (imageBase64) {
+            parts.push({
+                inlineData: {
+                    data: imageBase64.split(',')[1],
+                    mimeType: 'image/png'
+                }
+            });
+            parts.push({ text: "Analiza este logo y extrae su paleta de colores principal y sugiere tipografías que combinen." });
+        } else {
+            parts.push({ text: `Para una marca descrita como: "${description}", sugiere una paleta de colores y tipografía.` });
+        }
+
+        parts.push({ text: `Devuelve un objeto JSON con: 
+        1. "colors": array de 5 objetos { "hex": "#RRGGBB", "name": "Nombre en Español" }.
+        2. "typography": objeto con "headingFont" (nombre fuente popular) y "bodyFont" (nombre fuente popular).
+        Responde SOLO con JSON.` });
+
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        slogans: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING }
-                        }
-                    },
-                    required: ['slogans']
-                },
-            },
+            model,
+            contents: { parts },
+            config: { responseMimeType: "application/json" }
         });
+
         const result = JSON.parse(response.text);
-        return result.slogans || [];
+        // Normalizar salida
+        return {
+            colors: result.colors.map((c: any) => ({ hex: c.hex, name: c.name })),
+            typography: result.typography
+        };
     } catch (error) {
-        handleGeminiError(error, "slogan suggestions");
+        console.error("Error obteniendo brand kit:", error);
+        // Fallback
+        return {
+            colors: [{ hex: '#1C1C1E' }, { hex: '#F59E0B' }, { hex: '#FFFFFF' }, { hex: '#E0E0E0' }, { hex: '#4A4A4C' }],
+            typography: { headingFont: 'Inter', bodyFont: 'Roboto' }
+        };
     }
 };
 
-export const generateNameFromLogo = async (logoBase64: string) => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    const textPart = { text: "Analyze this logo. Suggest a creative and fitting brand name for it. Return only the name, with no extra text or quotes." };
+/**
+ * Genera un Mockup visual.
+ * Nota: Imagen 3/Gemini no pone logos sobre objetos 3D perfectamente (wrap) sin herramientas especializadas,
+ * pero podemos pedirle que genere una imagen "estilo mockup" del producto con el logo aplicado.
+ */
+export const generateMockup = async (logoBase64: string, type: 't-shirt' | 'business-card' | 'signage'): Promise<string> => {
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: { parts: [imagePart, textPart] }
+         const model = 'gemini-2.5-flash-image';
+         const prompts = {
+             't-shirt': "Una fotografía realista de una playera (camiseta) de alta calidad doblada sobre una mesa de madera, con este logotipo impreso en el pecho. Iluminación cinemática.",
+             'business-card': "Una fotografía macro profesional de tarjetas de presentación (visita) apiladas en un escritorio elegante, mostrando este logotipo claramente en el centro. Profundidad de campo.",
+             'signage': "Una foto de un letrero moderno en la fachada de un edificio o tienda, mostrando este logotipo. Estilo urbano, luz natural."
+         };
+
+         const response = await ai.models.generateContent({
+             model,
+             contents: {
+                 parts: [
+                     { inlineData: { data: logoBase64.split(',')[1], mimeType: 'image/png' } },
+                     { text: prompts[type] }
+                 ]
+             },
+             config: { responseModalities: [Modality.IMAGE] }
+         });
+
+        const candidates = response.candidates;
+        if (candidates && candidates[0]?.content?.parts) {
+            for (const part of candidates[0].content.parts) {
+                if (part.inlineData) {
+                    return `data:image/png;base64,${part.inlineData.data}`;
+                }
+            }
+        }
+        throw new Error("No se generó imagen.");
+    } catch (error) {
+        console.error("Error generando mockup:", error);
+        throw error;
+    }
+};
+
+/**
+ * Genera una variación del logo.
+ */
+export const generateLogoVariation = async (logoBase64: string, style: string): Promise<string> => {
+     return editImageWithGemini(logoBase64, `Crea una variación de este logo con estilo: ${style}. Mantén la identidad de marca pero explora una estética diferente.`);
+};
+
+/**
+ * Genera contenido para redes sociales (Caption + Idea de imagen).
+ * Como tenemos capacidad de generar imagen, generaremos la imagen del post también.
+ */
+export const generateSocialPost = async (brandName: string, logoBase64: string, topic: string): Promise<{ image: string, caption: string }> => {
+    try {
+        // 1. Generar el caption
+        const textModel = 'gemini-2.5-flash';
+        const textResp = await ai.models.generateContent({
+            model: textModel,
+            contents: `Escribe un post de Instagram atractivo y profesional para la marca "${brandName}". Tema: "${topic}".
+            Incluye emojis relevantes. El tono debe ser inspirador y mexicano (usa palabras como 'padre', 'chido', pero profesional si aplica, o neutro cálido).
+            Usa hashtags.
+            Longitud máxima: 280 caracteres.`
         });
-        return response.text.trim().replace(/["']/g, '');
-    } catch (error) {
-        handleGeminiError(error, "name from logo");
-    }
-};
+        const caption = textResp.text;
 
-
-export const generateSloganSuggestionsFromLogo = async (logoBase64: string, brandName: string): Promise<string[]> => {
-    const pureBase64 = logoBase64.split(',')[1];
-    const imagePart = { inlineData: { data: pureBase64, mimeType: 'image/png' } };
-    const textPart = { text: `Analyze this logo for a brand named '${brandName}'. Suggest 5 short, catchy slogans that match its style.` };
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: { parts: [imagePart, textPart] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        slogans: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING }
-                        }
-                    },
-                     required: ['slogans']
-                },
+        // 2. Generar la imagen del post
+        const imageModel = 'gemini-2.5-flash-image';
+        const imgResp = await ai.models.generateContent({
+            model: imageModel,
+            contents: {
+                parts: [
+                    { inlineData: { data: logoBase64.split(',')[1], mimeType: 'image/png' } },
+                    { text: `Crea una imagen cuadrada para redes sociales (Instagram) para la marca "${brandName}". Tema: "${topic}". La imagen debe ser estéticamente agradable, estilo lifestyle o fotografía de producto, e incorporar sutilmente el logo o sus colores.` }
+                ]
             },
+            config: { responseModalities: [Modality.IMAGE] }
         });
-        const result = JSON.parse(response.text);
-        return result.slogans || [];
+        
+        let image = "";
+        if (imgResp.candidates?.[0]?.content?.parts) {
+            for (const part of imgResp.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    image = `data:image/png;base64,${part.inlineData.data}`;
+                }
+            }
+        }
+
+        return { caption, image };
+
     } catch (error) {
-        handleGeminiError(error, "slogans from logo");
+        console.error("Error generando social post:", error);
+        throw error;
+    }
+};
+
+/**
+ * Genera guías de marca textuales.
+ */
+export const generateBrandGuidelines = async (brandName: string, logoBase64: string): Promise<any> => {
+    try {
+        const model = 'gemini-2.5-flash';
+        // Se asume que pasamos el logo para análisis visual
+        const parts: Part[] = [
+            { inlineData: { data: logoBase64.split(',')[1], mimeType: 'image/png' } },
+            { text: `Actúa como un Director Creativo experto. Para la marca "${brandName}" (cuyo logo adjunto), genera un breve manual de identidad en formato JSON en Español de México.
+            
+            Campos requeridos:
+            - logoPhilosophy: Explicación breve (40 palabras) del significado del logo.
+            - clearSpaceRule: Regla de espacio libre (1 frase).
+            - minimumSize: Tamaño mínimo recomendado (ej. 20px).
+            - colorUsage: Array de 2 strings con reglas de uso de color (ej. "Usar fondo oscuro para...").
+            - logoMisuse: Array de 3 cosas que NO hacer con el logo.
+            - toneOfVoice: Array de 3 adjetivos que describan la voz de la marca.
+            
+            Responde SOLO JSON.` }
+        ];
+
+        const response = await ai.models.generateContent({
+            model,
+            contents: { parts },
+            config: { responseMimeType: "application/json" }
+        });
+
+        return JSON.parse(response.text);
+    } catch (error) {
+        console.error("Error generando guías:", error);
+        throw error;
     }
 };

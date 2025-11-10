@@ -1,4 +1,5 @@
-import React, { useState, useCallback, ChangeEvent, KeyboardEvent, useRef, useEffect } from 'react';
+
+import React, { useState, useCallback, ChangeEvent, useRef, useEffect } from 'react';
 import { fileToBase64 } from './utils/fileUtils';
 import { 
     editImageWithGemini, 
@@ -17,940 +18,570 @@ import {
 type Mode = 'create' | 'edit';
 type Theme = 'light' | 'dark';
 type BrandKit = {
-  colors: { hex: string }[];
+  colors: { hex: string; name?: string }[];
   typography: { headingFont: string; bodyFont: string };
 };
 type Status = 'idle' | 'loading' | 'error' | 'success';
-type MockupState = {
-  status: Status;
-  url?: string;
-  error?: string;
-};
-type BrandGuidelinesState = {
-    status: Status;
-    error?: string;
-    logoPhilosophy?: string;
-    clearSpaceRule?: string;
-    minimumSize?: string;
-    colorUsage?: string[];
-    logoMisuse?: string[];
-    toneOfVoice?: string[];
-};
-type SocialPostState = {
-    status: Status;
-    image?: string;
-    caption?: string;
-    error?: string;
-};
-type LogoVariationState = {
-    status: Status;
-    url?: string;
-    error?: string;
-};
-
 
 // --- ICONS ---
 const UploadIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg> );
-const SparklesIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" /></svg> );
-const DownloadIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg> );
-const RefreshIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0 8.25 8.25 0 0 0 0-11.667l-3.182-3.182m0 0-3.182 3.182m7.156 0-3.182-3.182" /></svg> );
-const WandIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 0 0-2.12-2.122L6.12 13.65a3 3 0 0 0-2.122 2.122L3.65 16.12a3 3 0 0 0 2.122 2.122L6.12 18.57a3 3 0 0 0 2.12-2.122L9.53 16.122ZM18.88 9.53a3 3 0 0 0-2.122-2.122L16.12 6.12a3 3 0 0 0-2.122 2.122L13.65 9.53a3 3 0 0 0 2.122 2.122L16.12 12.12a3 3 0 0 0 2.12-2.122L18.88 9.53Z" /><path strokeLinecap="round" strokeLinejoin="round" d="m12.12 6.12 2.247-2.247a3 3 0 0 0-4.242-4.242L6.12 3.65a3 3 0 0 0-2.122 2.122L3.65 6.12a3 3 0 0 0 2.122 2.122L6.12 8.487m6-2.367.003.002.002.002.002.002.003.002.002.002.002.003.002.002.002.003.002.002.003.002.002.002.003.002.002.003.002.002.002.003.002.002Z" /></svg> );
-const SendIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg> );
-const CheckIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> );
-const XIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg> );
-const RevertIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg> );
-const SunIcon: React.FC<{ className?: string }> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.95-4.243-1.59-1.591M3.75 12H6m4.243-4.95-1.59 1.591M12 12a4.5 4.5 0 0 0 0 9 4.5 4.5 0 0 0 0-9Z" /></svg> );
-const MoonIcon: React.FC<{ className?: string }> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg> );
-const InfoIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg> );
-const ClearSpaceIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg> );
-const RulerIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m-10.5-1.5-2-2m-3 3-2-2m-3 3-2-2m1.5-4.5 2-2m3 3 2-2m3 3 2-2m1.5 4.5 2-2m3 3 2-2m3 3 2-2m-1.5-13.5-2-2m-3 3-2-2m-3 3-2-2m1.5 13.5 2-2m3 3 2-2m3 3 2-2" /></svg> );
-const TagsIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" /></svg> );
-const ThumbsUpIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.267 9.333 13.5a3.75 3.75 0 1 0 5.303-5.303l-3.333-3.333a3.75 3.75 0 0 0-5.303 5.303Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 13.5a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" /></svg> );
-const ThumbsDownIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M11.412 15.655 9.75 17.313a1.5 1.5 0 0 1-2.121 0l-2.25-2.25a1.5 1.5 0 0 1 0-2.121l9-9a1.5 1.5 0 0 1 2.121 0l2.25 2.25a1.5 1.5 0 0 1 0 2.121l-9 9Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12.75 12.75 15 15m-4.5-4.5 2.25 2.25" /></svg> );
+const SparklesIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" /></svg> );
+const PhotoIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg> );
+const SwatchIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a16.001 16.001 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42" /></svg> );
+const DocumentTextIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg> );
+const ShareIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" /></svg> );
+const SunIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 21v-2.25m-6.364-.386 1.591-1.591M3 12h2.25m.386-6.364 1.591-1.591M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" /></svg> );
+const MoonIcon: React.FC<{className?: string}> = ({ className }) => ( <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg> );
+const CheckIcon: React.FC<{className?: string}> = ({ className }) => (<svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>);
 
-// --- LOADING SPINNERS ---
-const PulsingSparklesLoader: React.FC<{text: string}> = ({ text }) => (
-    <div className="flex flex-col items-center justify-center space-y-6">
-        <SparklesIcon className="h-20 w-20 text-amber-500/40 dark:text-amber-500/40 animate-pulse" />
-        <p className="text-amber-700 dark:text-amber-400 font-medium tracking-wide">{text}</p>
-    </div>
-);
+const STYLES = ["Minimalista", "Moderno", "Vintage", "Geométrico", "3D", "Abstracto", "Lujo", "Orgánico", "Tecnológico", "Retro"];
+const EDIT_STYLES = ["Mantener Original", ...STYLES];
 
-// --- UI COMPONENTS ---
-const Section: React.FC<{title: string, children: React.ReactNode}> = ({ title, children }) => (
-    <div className="space-y-3">
-        <label className="text-sm font-semibold text-warm-gray-800 dark:text-slate-300 tracking-wide">{title}</label>
-        {children}
-    </div>
-);
+export default function App() {
+  // --- STATE ---
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('theme');
+      if (stored) return stored as Theme;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  });
 
-const InputField = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input
-      {...props}
-      className={`block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all ${className || ''}`}
-    />
-  );
+  const [mode, setMode] = useState<Mode>('create');
   
-const TextareaField = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea
-      {...props}
-      className={`block w-full rounded-lg border-0 bg-white/70 dark:bg-warm-gray-950/70 py-3 px-4 text-charcoal-800 dark:text-slate-200 shadow-inner shadow-black/5 dark:shadow-black/20 ring-1 ring-warm-gray-300 dark:ring-warm-gray-700/80 placeholder:text-warm-gray-700/60 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-500 focus:shadow-[0_0_15px_2px_rgba(245,158,11,0.3)] transition-all ${className || ''}`}
-    />
-);
+  // Inputs
+  const [brandName, setBrandName] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState('Minimalista');
+  
+  // Edit Mode Inputs
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [editName, setEditName] = useState(''); // Para cambiar el texto del logo
+  const [editInstructions, setEditInstructions] = useState('');
+  const [editStyle, setEditStyle] = useState('Mantener Original');
 
-const ThemeToggle: React.FC<{ theme: Theme; toggleTheme: () => void; }> = ({ theme, toggleTheme }) => (
-    <button onClick={toggleTheme} className="absolute top-6 right-6 p-2 rounded-full text-warm-gray-700 dark:text-slate-400 hover:bg-warm-gray-200 dark:hover:bg-warm-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 dark:focus:ring-offset-warm-gray-950 transition-all duration-300" aria-label="Toggle theme">
-        {theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}
-    </button>
-);
-
-
-// --- DATA ---
-const DESIGNER_PERSONAS = [
-    { name: 'Swiss Master', value: 'a minimalist, geometric, clean style using sans-serif typography, embodying Swiss design principles.' },
-    { name: 'Vintage Artisan', value: 'a style with textures, stamps, and seals, using serif and script typography for a vintage, handcrafted feel.' },
-    { name: 'Tech Innovator', value: 'a futuristic, abstract style with gradients and modern aesthetics.' },
-    { name: 'Playful Illustrator', value: 'a fun, friendly, hand-drawn style, possibly featuring a character or mascot.' },
-    { name: 'Corporate Minimalist', value: 'a clean, modern, and professional style, often using simple geometric shapes and sans-serif fonts for a corporate feel.' },
-    { name: 'Luxury Classic', value: 'an elegant and sophisticated style, featuring refined serif fonts, monograms, and a timeless, high-end aesthetic.' },
-    { name: 'Eco Organic', value: 'a natural, earthy style with hand-drawn elements, textured effects, and organic shapes, conveying sustainability.' },
-    { name: 'Bold Pop', value: 'a vibrant, energetic style using bold graphics, bright colors, and playful typography inspired by pop art.' },
-];
-const MOCKUP_TYPES = ['Business Card', 'Coffee Cup', 'T-Shirt', 'Storefront Sign', 'Social Media Profile', 'Website on Laptop', 'Tote Bag', 'Letterhead'];
-
-const GuidelineItem: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode; }> = ({ icon, title, children }) => (
-    <div className="flex items-start gap-4">
-        <div className="flex-shrink-0 text-amber-600 dark:text-amber-500 mt-1">{icon}</div>
-        <div>
-            <h4 className="font-semibold text-charcoal-800 dark:text-slate-200">{title}</h4>
-            <div className="mt-1 text-sm text-warm-gray-800/90 dark:text-slate-300/90">{children}</div>
-        </div>
-    </div>
-);
-
-
-const App: React.FC = () => {
-  const [activeMode, setActiveMode] = useState<Mode>('create');
-  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.className as Theme));
+  // Output / Results
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
-  
-  // Universal State
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<string>('');
-  const [brandName, setBrandName] = useState('');
-  const [slogan, setSlogan] = useState('');
-  
-  // Create Mode State
-  const [industry, setIndustry] = useState('');
-  const [vision, setVision] = useState('');
-  const [designerPersona, setDesignerPersona] = useState('');
-  const [inspirationFiles, setInspirationFiles] = useState<File[]>([]);
-  const [inspirationPreviews, setInspirationPreviews] = useState<string[]>([]);
-  
-  // Edit Mode State
-  const [originalImageFile, setOriginalImageFile] = useState<File | null>(null);
-  const [editHistory, setEditHistory] = useState<{user: string, image: string}[]>([]);
-  const [isEditLogoFinalized, setIsEditLogoFinalized] = useState(false);
-  
-  // Brand Kit State
+
+  // Feature States
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
-  const [showBrandKit, setShowBrandKit] = useState(false);
-  const [generatedMockups, setGeneratedMockups] = useState<Record<string, MockupState>>({});
-  const [socialPost, setSocialPost] = useState<SocialPostState | null>(null);
-  const [brandGuidelines, setBrandGuidelines] = useState<BrandGuidelinesState | null>(null);
-  const [logoVariations, setLogoVariations] = useState<Record<string, LogoVariationState>>({});
+  const [mockups, setMockups] = useState<{[key: string]: string}>({});
+  const [mockupStatus, setMockupStatus] = useState<Status>('idle');
+  const [socialPost, setSocialPost] = useState<{image?: string, caption?: string} | null>(null);
+  const [guidelines, setGuidelines] = useState<any>(null);
+  const [slogans, setSlogans] = useState<string[]>([]);
+  const [loadingMessage, setLoadingMessage] = useState('');
 
-  // Mockup Personalization State
-  const [mockupName, setMockupName] = useState('Aurea Carballo');
-  const [mockupTitle, setMockupTitle] = useState('Propietaria');
-  const [mockupPhone, setMockupPhone] = useState('+1 555 123 4567');
-  const [mockupEmail, setMockupEmail] = useState('soul.gifts@gmail.com');
-  const [mockupWebsite, setMockupWebsite] = useState('soul.gifts.com.mx');
-
-  // Text generation loading state
-  const [isGeneratingName, setIsGeneratingName] = useState(false);
-
-  // Slogan Modal State
-  const [isSloganModalOpen, setIsSloganModalOpen] = useState(false);
-  const [sloganSuggestions, setSloganSuggestions] = useState<string[]>([]);
-  const [sloganGenerationStatus, setSloganGenerationStatus] = useState<Status>('idle');
-  const [sloganGenerationError, setSloganGenerationError] = useState<string | null>(null);
-
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  
-  // --- EFECTOS DE INTERACTIVIDAD IA ---
+  // --- EFFECTS ---
   useEffect(() => {
-    // 1. Fondo Viviente: Controla la velocidad de la animación del fondo según el estado de la IA.
-    document.body.style.setProperty(
-        '--gradient-animation-duration',
-        status === 'loading' ? '3s' : '15s'
-    );
-  }, [status]);
-  
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [editHistory]);
-  
-  useEffect(() => {
-    if (brandKit) {
-        const timer = setTimeout(() => setShowBrandKit(true), 100);
-        return () => clearTimeout(timer);
-    } else {
-        setShowBrandKit(false);
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  // --- HANDLERS ---
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64 = await fileToBase64(file);
+      setUploadedImage(base64);
+      // Auto-detect brand name if possible
+      const detectedName = await generateNameFromLogo(base64);
+      setBrandName(detectedName);
+    } catch (err) {
+      console.error(err);
+      setError("Error al cargar la imagen");
     }
-  }, [brandKit]);
+  };
 
-  const toggleTheme = useCallback(() => {
-    setTheme(prevTheme => {
-        const newTheme = prevTheme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('theme', newTheme);
-        document.documentElement.className = newTheme;
-        return newTheme;
-    });
-  }, []);
-
-  const handleReset = useCallback(() => {
-    setStatus('idle');
-    setError(null);
-    setGeneratedImage(null);
-    setPrompt('');
-    setBrandName('');
-    setSlogan('');
-    setIndustry('');
-    setVision('');
-    setDesignerPersona('');
-    setInspirationFiles([]);
-    setInspirationPreviews([]);
-    setOriginalImageFile(null);
-    setEditHistory([]);
-    setBrandKit(null);
-    setGeneratedMockups({});
-    setSocialPost(null);
-    setBrandGuidelines(null);
-    setLogoVariations({});
-    setIsEditLogoFinalized(false);
-  }, []);
-  
-  const handleModeChange = useCallback((mode: Mode) => {
-    if (mode !== activeMode) {
-      setActiveMode(mode);
-      handleReset();
-    }
-  }, [activeMode, handleReset]);
-
-  // Fix: Replaced Array.from with a manual loop to ensure correct type inference from FileList.
-  const handleInspirationUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-        const fileList: File[] = [];
-        for (let i = 0; i < Math.min(files.length, 3); i++) {
-            const file = files.item(i);
-            if (file) {
-                fileList.push(file);
-            }
-        }
-        setInspirationFiles(fileList);
-        const previews = await Promise.all(fileList.map(file => fileToBase64(file)));
-        setInspirationPreviews(previews);
-    }
-  }, []);
-
-  const handleImageUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleReset();
-      setActiveMode('edit');
-      setOriginalImageFile(file);
-      try {
-        const base64Preview = await fileToBase64(file);
-        setGeneratedImage(base64Preview);
-        setEditHistory([{ user: 'Original', image: base64Preview }]);
-      } catch (err) {
-        setError('Failed to read the image file.');
-        setStatus('error');
-      }
-    }
-  }, [handleReset]);
-
-  const handleGuidedSubmit = useCallback(async () => {
-    let fullPrompt = `A professional, high-quality logo for a brand named '${brandName}' in the ${industry} industry.`;
-    if (slogan) fullPrompt += ` The logo should creatively incorporate the slogan: "${slogan}". The brand name '${brandName}' should not be repeated within the slogan text itself.`;
-    if (vision) fullPrompt += ` The brand's vision is: "${vision}".`;
-    if (designerPersona) fullPrompt += ` The desired style is ${designerPersona}`;
-    if (inspirationPreviews.length > 0) fullPrompt += ` Draw inspiration from the provided images for mood, color, and style.`;
-    
+  const handleGenerate = async () => {
     setStatus('loading');
     setError(null);
     setGeneratedImage(null);
     setBrandKit(null);
-    
+    setMockups({});
+    setSocialPost(null);
+    setGuidelines(null);
+    setSlogans([]);
+
     try {
-      const imageAssets = await Promise.all(inspirationFiles.map(async (file) => ({
-        base64: await fileToBase64(file),
-        mimeType: file.type
-      })));
+      if (mode === 'create') {
+        setLoadingMessage("Diseñando tu logo desde cero...");
+        
+        // 1. Generate Name if empty (optional feature, implied by description)
+        let finalName = brandName;
+        if (!finalName && description) {
+            setLoadingMessage("Ideando un nombre para tu marca...");
+            finalName = await generateBrandName(description);
+            setBrandName(finalName);
+        }
 
-      const newImageBase64 = await createImageWithGemini(fullPrompt, imageAssets);
-      setGeneratedImage(newImageBase64);
+        // 2. Create Image
+        setLoadingMessage("Generando conceptos visuales...");
+        const image = await createImageWithGemini(description || finalName, selectedStyle);
+        setGeneratedImage(image);
+
+        // 3. Initial Brand Kit
+        setLoadingMessage("Extrayendo paleta de colores...");
+        const kit = await getInitialBrandKit(description, image);
+        setBrandKit(kit);
+
+        // 4. Slogans
+        const slogansList = await generateSloganSuggestions(finalName, description);
+        setSlogans(slogansList);
+
+      } else {
+        // EDIT MODE
+        if (!uploadedImage) {
+            setError("Por favor sube una imagen primero.");
+            setStatus('idle');
+            return;
+        }
+        setLoadingMessage("Transformando tu logo...");
+        
+        let prompt = "";
+        
+        // Lógica específica para preservar integridad si se pide solo cambiar nombre
+        if (editName) {
+            prompt += `Cambia el texto visible en el logo para que diga exactamente: "${editName}". `;
+        }
+        
+        if (editStyle === 'Mantener Original') {
+            prompt += `IMPORTANTE: Mantén EXACTAMENTE los mismos colores, tipografía y estilo gráfico del logo original. Solo modifica el texto si se indicó, o mejora la definición. No cambies la estética. `;
+        } else {
+            prompt += `Aplica un estilo visual ${editStyle}. `;
+        }
+
+        if (editInstructions) {
+            prompt += `Instrucciones adicionales: ${editInstructions}.`;
+        }
+
+        const image = await editImageWithGemini(uploadedImage, prompt);
+        setGeneratedImage(image);
+
+        // Update Brand Kit based on new image
+        const kit = await getInitialBrandKit("Logo editado", image);
+        setBrandKit(kit);
+        
+        if (brandName) {
+             const slogansList = await generateSloganSuggestionsFromLogo(brandName, image);
+             setSlogans(slogansList);
+        }
+      }
       setStatus('success');
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+    } catch (err: any) {
+      setError(err.message || "Ocurrió un error inesperado");
       setStatus('error');
     }
-  }, [brandName, industry, slogan, vision, designerPersona, inspirationFiles, inspirationPreviews]);
-
-  const handleEditSubmit = useCallback(async () => {
-    if (!prompt || !generatedImage) return;
-    const currentPrompt = prompt;
-    setPrompt('');
-    setStatus('loading');
-    setError(null);
-    setIsEditLogoFinalized(false);
-    try {
-        const mimeType = (originalImageFile?.type) || (generatedImage.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/)?.[1]) || 'image/png';
-        
-        const editInstruction = `You are an expert logo designer. Your task is to precisely modify the provided logo based on the user's request.
-
-User's request: '${currentPrompt}'
-
-Follow these critical instructions:
-1.  **Interpret the Request:** Analyze whether the user wants to change text, colors, style, or a combination.
-2.  **For Visual Edits (Colors, Style):** If the request is to change colors, styles, or shapes, apply these changes creatively while maintaining the logo's core structure and recognizability.
-    *   **Style Keywords:** When a style like 'vintage', 'futuristic', or 'minimalist' is requested, apply it thoughtfully. For 'vintage,' consider adding subtle textures, using a slightly desaturated color palette, or referencing classic design elements. For 'gold and silver,' apply metallic textures and lighting effects realistically. The goal is a tasteful and cohesive stylistic transformation.
-3.  **For Text Edits:** If the request involves changing text, it is CRITICAL to render the new text with 100% accuracy. The new text must also PERFECTLY match the original font, 3D effects, texture, lighting, and perspective.
-4.  **Preserve the Unchanged:** Do not alter any other part of the logo unless specifically requested. The final output must be only the newly generated image with the precise edits applied.`;
-
-        const newImageBase64 = await editImageWithGemini( generatedImage, mimeType, editInstruction );
-        setGeneratedImage(newImageBase64);
-        setEditHistory(prev => [...prev, { user: currentPrompt, image: newImageBase64 }]);
-        setStatus('success');
-    } catch (err) {
-        setError(err instanceof Error ? err.message : "An unknown error occurred.");
-        setStatus('error');
-    }
-}, [prompt, generatedImage, originalImageFile, setEditHistory]);
-
-  const handleRevertToVersion = useCallback((index: number) => {
-    const versionToRestore = editHistory[index];
-    if (!versionToRestore) return;
-
-    setGeneratedImage(versionToRestore.image);
-    setEditHistory(editHistory.slice(0, index + 1));
-    setIsEditLogoFinalized(false);
-  }, [editHistory]);
-
-  const handleFinalizeLogo = useCallback(() => {
-    setIsEditLogoFinalized(true);
-  }, []);
-
-  const handleGenerateInitialBrandKit = useCallback(async () => {
-    if (!generatedImage) return;
-    setStatus('loading');
-    setError(null);
-    try {
-        const kit = await getInitialBrandKit(generatedImage);
-        setBrandKit(kit);
-        setStatus('success');
-    } catch (err) {
-        setError(err instanceof Error ? err.message : "An unknown error occurred during brand kit generation.");
-        setStatus('error');
-    }
-  }, [generatedImage]);
-
-  const handleGenerateMockup = useCallback(async (mockupType: string) => {
-    if (!generatedImage) return;
-    setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'loading' } }));
-    try {
-        const personalizationData = {
-            name: mockupName,
-            title: mockupTitle,
-            phone: mockupPhone,
-            email: mockupEmail,
-            website: mockupWebsite,
-        };
-        const url = await generateMockup(generatedImage, mockupType, personalizationData);
-        setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'success', url } }));
-    } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : "Failed to generate mockup.";
-        setGeneratedMockups(prev => ({ ...prev, [mockupType]: { status: 'error', error: errorMessage } }));
-    }
-  }, [generatedImage, mockupName, mockupTitle, mockupPhone, mockupEmail, mockupWebsite]);
-
-  // Automatically generate non-personalizable mockups when the brand kit is first created.
-  useEffect(() => {
-    const shouldGenerate = brandKit && 
-        !generatedMockups['Coffee Cup']?.status && 
-        !generatedMockups['T-Shirt']?.status;
-
-    if (shouldGenerate) {
-        handleGenerateMockup('Coffee Cup');
-        handleGenerateMockup('T-Shirt');
-    }
-  }, [brandKit, handleGenerateMockup, generatedMockups]);
-  
-  const handleUpdatePersonalizedMockups = useCallback(() => {
-    const personalizableTypes = new Set(['Business Card', 'Letterhead']);
-    Object.keys(generatedMockups).forEach(mockupType => {
-      // Only re-generate if it's a personalizable type AND it has already been generated (i.e., has a status)
-      if (personalizableTypes.has(mockupType) && generatedMockups[mockupType]?.status) {
-        handleGenerateMockup(mockupType);
-      }
-    });
-  }, [generatedMockups, handleGenerateMockup]);
-
-
-  const handleGenerateLogoVariation = async (variation: 'white' | 'profile_picture' | 'transparent_bg') => {
-    if (!generatedImage) return;
-    setLogoVariations(prev => ({ ...prev, [variation]: { status: 'loading' } }));
-    try {
-        const url = await generateLogoVariation(generatedImage, variation);
-        setLogoVariations(prev => ({ ...prev, [variation]: { status: 'success', url } }));
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to generate variation.";
-        setLogoVariations(prev => ({ ...prev, [variation]: { status: 'error', error: message } }));
-    }
-  }
-
-  const handleGenerateSocialPost = async () => {
-    if (!generatedImage) return;
-    setSocialPost({ status: 'loading' });
-    try {
-        const post = await generateSocialPost(generatedImage, brandName, vision);
-        setSocialPost({ status: 'success', ...post });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to generate post.";
-        setSocialPost({ status: 'error', error: message });
-    }
-  }
-  
-  const handleGenerateGuidelines = async () => {
-    if (!generatedImage) return;
-    setBrandGuidelines({ status: 'loading' });
-    try {
-        const guidelines = await generateBrandGuidelines(generatedImage);
-        setBrandGuidelines({ status: 'success', ...guidelines });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to generate guidelines.";
-        setBrandGuidelines({ status: 'error', error: message });
-    }
-  }
-
- const handleGenerateName = async () => {
-    setIsGeneratingName(true);
-    setError(null);
-    try {
-      let result = '';
-      if (activeMode === 'create') {
-        if (!industry) {
-            setError("Please enter an industry to generate a name.");
-            setIsGeneratingName(false);
-            return;
-        }
-        result = await generateBrandName(industry, vision);
-        setBrandName(result);
-      } else { // edit mode
-        if (!generatedImage) {
-            setIsGeneratingName(false);
-            return;
-        }
-        result = await generateNameFromLogo(generatedImage);
-        setBrandName(result);
-      }
-    } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to generate name suggestion.');
-    } finally {
-      setIsGeneratingName(false);
-    }
   };
 
-  const handleOpenSloganModal = async () => {
-    if (!brandName) {
-        setError("Please enter a brand name to generate slogans.");
-        return;
-    }
-    setIsSloganModalOpen(true);
-    setSloganGenerationStatus('loading');
-    setSloganSuggestions([]);
-    setSloganGenerationError(null);
-    try {
-        const results = activeMode === 'create'
-            ? await generateSloganSuggestions(brandName, industry, vision)
-            : await generateSloganSuggestionsFromLogo(generatedImage!, brandName);
-
-        setSloganSuggestions(results);
-        setSloganGenerationStatus('success');
-    } catch (err) {
-        setSloganGenerationError(err instanceof Error ? err.message : 'Failed to generate suggestions.');
-        setSloganGenerationStatus('error');
-    }
-};
-
-const handleSelectSlogan = (selectedSlogan: string) => {
-    setSlogan(selectedSlogan);
-    setIsSloganModalOpen(false);
-};
-
-  const downloadImage = (url: string, filename: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleCreateMockup = async (type: 't-shirt' | 'business-card' | 'signage') => {
+      if (!generatedImage) return;
+      setMockupStatus('loading');
+      try {
+          const res = await generateMockup(generatedImage, type);
+          setMockups(prev => ({...prev, [type]: res}));
+          setMockupStatus('success');
+      } catch (e) {
+          setMockupStatus('error');
+      }
   };
-  
-  const isCreateDisabled = status === 'loading' || !brandName || !industry;
-  
-  const personalizableMockupTypes = new Set(['Business Card', 'Letterhead']);
-  const hasGeneratedPersonalizableMockup = Object.keys(generatedMockups).some(
-    type => personalizableMockupTypes.has(type) && generatedMockups[type]?.status
-  );
-  const isUpdatingPersonalizedMockups = Object.entries(generatedMockups).some(
-    // FIX: Explicitly type the destructured arguments to resolve a type inference issue.
-    ([type, state]: [string, MockupState]) => personalizableMockupTypes.has(type) && state.status === 'loading'
-  );
+
+  const handleSocialPost = async () => {
+      if (!generatedImage || !brandName) return;
+      setStatus('loading'); // Reuse global status or create new one
+      try {
+          const res = await generateSocialPost(brandName, generatedImage, "Lanzamiento de marca");
+          setSocialPost(res);
+          setStatus('success');
+      } catch (e) {
+          setStatus('error');
+      }
+  };
+
+  const handleGuidelines = async () => {
+      if (!generatedImage || !brandName) return;
+      setStatus('loading');
+      try {
+          const res = await generateBrandGuidelines(brandName, generatedImage);
+          setGuidelines(res);
+          setStatus('success');
+      } catch (e) {
+          setStatus('error');
+      }
+  };
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-12">
-      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-      <header className="text-center mb-12 animate-fadeInUp">
-        <h1 className="text-5xl sm:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-charcoal-900 via-charcoal-800 to-charcoal-900 dark:from-slate-100 dark:via-slate-300 dark:to-slate-100 pb-2">
-          AI Brand Co-pilot
-        </h1>
-        <p className="mt-2 text-lg text-warm-gray-700 dark:text-slate-400 max-w-2xl mx-auto">Your partner in crafting a unique brand identity from vision to reality.</p>
+    <div className="min-h-screen flex flex-col font-sans selection:bg-amber-500 selection:text-white">
+      {/* HEADER */}
+      <header className="w-full px-6 py-4 flex justify-between items-center border-b border-warm-gray-200 dark:border-warm-gray-800 bg-white/50 dark:bg-warm-gray-950/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-amber-500/20">
+            AI
+          </div>
+          <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400">
+            Copiloto de Marca
+          </h1>
+        </div>
+        <button 
+          onClick={toggleTheme}
+          className="p-2 rounded-full hover:bg-warm-gray-200 dark:hover:bg-warm-gray-800 transition-colors"
+          aria-label="Cambiar tema"
+        >
+          {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
+        </button>
       </header>
 
-      <main className="max-w-8xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* --- INPUT PANEL --- */}
-        <div className="bg-white/60 dark:bg-warm-gray-900/60 backdrop-blur-xl rounded-3xl border border-warm-gray-200 dark:border-warm-gray-700/80 p-8 flex flex-col space-y-6">
-            <div className="flex justify-between items-center border-b border-warm-gray-200 dark:border-warm-gray-700 pb-5">
-                <div className="flex bg-warm-gray-100 dark:bg-warm-gray-800/80 p-1.5 rounded-xl space-x-1">
-                    <button onClick={() => handleModeChange('create')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${activeMode === 'create' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-500' : 'text-warm-gray-700 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white hover:bg-warm-gray-200 dark:hover:bg-warm-gray-700/50'}`}>Create</button>
-                    <button onClick={() => handleModeChange('edit')} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${activeMode === 'edit' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-500' : 'text-warm-gray-700 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white hover:bg-warm-gray-200 dark:hover:bg-warm-gray-700/50'}`}>Edit</button>
-                </div>
-                 <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 text-sm text-warm-gray-700 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white hover:bg-warm-gray-200 dark:hover:bg-warm-gray-700/50 rounded-lg transition-colors duration-300" aria-label="Start Over">
-                    <RefreshIcon className="h-4 w-4" />
-                    Start Over
+      <main className="flex-grow container mx-auto px-4 py-8 max-w-6xl">
+        
+        {/* TABS */}
+        <div className="flex justify-center mb-8">
+            <div className="bg-warm-gray-200 dark:bg-warm-gray-900 p-1 rounded-xl inline-flex shadow-inner">
+                <button 
+                    onClick={() => setMode('create')}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'create' ? 'bg-white dark:bg-warm-gray-800 shadow-sm text-amber-600 dark:text-amber-400' : 'text-warm-gray-600 dark:text-warm-gray-400 hover:text-warm-gray-900 dark:hover:text-white'}`}
+                >
+                    Crear Nuevo
+                </button>
+                <button 
+                    onClick={() => setMode('edit')}
+                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${mode === 'edit' ? 'bg-white dark:bg-warm-gray-800 shadow-sm text-amber-600 dark:text-amber-400' : 'text-warm-gray-600 dark:text-warm-gray-400 hover:text-warm-gray-900 dark:hover:text-white'}`}
+                >
+                    Editar Existente
                 </button>
             </div>
-
-            {/* CREATE MODE: GUIDED ASSISTANT */}
-            {activeMode === 'create' && (
-                <div className="space-y-6">
-                    <h2 className="text-2xl font-semibold text-charcoal-900 dark:text-slate-100">Intelligent Design Brief</h2>
-                    <Section title="Brand Name & Industry">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="relative">
-                                <InputField type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., The Daily Grind" />
-                                <button onClick={handleGenerateName} disabled={isGeneratingName || !industry} title="Suggest a name" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition-colors duration-300"><WandIcon className="h-5 w-5"/></button>
-                            </div>
-                           <InputField type="text" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Coffee Shop" />
-                        </div>
-                    </Section>
-                    <Section title="Slogan (optional)">
-                        <div className="relative">
-                           <InputField type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="e.g., Your daily dose of inspiration." />
-                           <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest slogans" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition-colors duration-300"><WandIcon className="h-5 w-5"/></button>
-                        </div>
-                    </Section>
-                     <Section title="Describe your vision (optional)">
-                        <TextareaField value={vision} onChange={(e) => setVision(e.target.value)} rows={3} placeholder="e.g., A mix of vintage engraving and modern tech..." />
-                    </Section>
-                    <Section title="Designer Persona (optional)">
-                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {DESIGNER_PERSONAS.map(p => <button key={p.name} onClick={() => setDesignerPersona(p.value)} className={`text-center p-3 text-xs font-semibold rounded-lg transition-all duration-300 border active:scale-95 transform hover:-translate-y-0.5 ${designerPersona === p.value ? 'bg-amber-100/50 dark:bg-amber-900/50 border-amber-500 text-amber-700 dark:text-amber-400 shadow-lg shadow-amber-500/10' : 'bg-warm-gray-100 dark:bg-warm-gray-800 text-warm-gray-800 dark:text-slate-300 hover:bg-warm-gray-200/60 dark:hover:bg-warm-gray-700/60 border-warm-gray-300 dark:border-warm-gray-700'}`}>{p.name}</button>)}
-                        </div>
-                    </Section>
-                    <Section title="Visual Inspiration (optional, up to 3)">
-                        <div className="flex items-center gap-4">
-                            <label htmlFor="inspiration-upload" className="cursor-pointer rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-amber-700 dark:text-amber-500 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 transition-colors duration-300 active:scale-95">Upload Images</label>
-                            <input id="inspiration-upload" type="file" className="sr-only" accept="image/*" multiple onChange={handleInspirationUpload} />
-                            <div className="flex gap-3">
-                                {inspirationPreviews.map((src, i) => <img key={i} src={src} className="h-14 w-14 rounded-lg object-cover border-2 border-warm-gray-300 dark:border-warm-gray-700 shadow-md"/>)}
-                            </div>
-                        </div>
-                    </Section>
-                    <div className="pt-4">
-                        <button onClick={handleGuidedSubmit} disabled={isCreateDisabled} className={`w-full flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3.5 py-4 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 disabled:from-warm-gray-300 disabled:to-warm-gray-300 dark:disabled:from-warm-gray-700 dark:disabled:to-warm-gray-700 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-300 transform hover:-translate-y-1 active:scale-95 disabled:transform-none ${!isCreateDisabled ? 'shimmer-effect' : ''}`}>Create New Logo <SparklesIcon className="h-5 w-5" /></button>
-                    </div>
-                </div>
-            )}
-            
-            {/* EDIT MODE: CONVERSATIONAL CHAT */}
-            {activeMode === 'edit' && (
-                 <div className="flex flex-col h-full">
-                    {!generatedImage ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center">
-                           <h2 className="text-2xl font-semibold text-charcoal-900 dark:text-slate-100 mb-4">Upload a Logo to Edit</h2>
-                           <div className="w-full mt-2 flex justify-center rounded-xl border-2 border-dashed border-warm-gray-300 dark:border-warm-gray-600 px-6 py-12 hover:border-amber-400 transition-colors duration-300 bg-warm-gray-100/50 dark:bg-warm-gray-800/20">
-                                <input id="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleImageUpload} />
-                                <div className="text-center">
-                                    <UploadIcon className="mx-auto h-12 w-12 text-warm-gray-700/60 dark:text-slate-500" />
-                                    <div className="mt-4 flex text-sm text-warm-gray-700/80 dark:text-slate-400"><label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-semibold text-amber-600 hover:text-amber-500"><span>Upload a file</span></label><p className="pl-1">or drag and drop</p></div>
-                                    <p className="text-xs text-warm-gray-700/60 dark:text-slate-500">PNG, JPG, etc.</p>
-                                </div>
-                           </div>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col flex-grow min-h-0">
-                            <div className="mb-4 space-y-2">
-                                <div className="relative">
-                                     <InputField type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Brand Name" className="text-lg font-semibold pr-10"/>
-                                      <button onClick={handleGenerateName} disabled={isGeneratingName} title="Suggest a name based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
-                                </div>
-                                <div className="relative">
-                                    <InputField type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Slogan (optional)" className="pr-10"/>
-                                    <button onClick={handleOpenSloganModal} disabled={sloganGenerationStatus === 'loading' || !brandName} title="Suggest a slogan based on the logo" className="absolute inset-y-0 right-0 flex items-center pr-3 text-amber-600 hover:text-amber-500 disabled:text-warm-gray-300 dark:disabled:text-slate-500 disabled:cursor-not-allowed"><WandIcon className="h-5 w-5"/></button>
-                                </div>
-                            </div>
-                            <div className="flex-grow overflow-y-auto pr-2 space-y-5 mb-4 -mr-2">
-                                {editHistory.map((entry, index) => {
-                                    const isOriginal = index === 0;
-                                    const altText = isOriginal ? 'Original Image' : `Edit step ${index}`;
-                                    const filename = isOriginal ? 'logo_original.png' : `logo_edit_${index}.png`;
-
-                                    return (
-                                        <React.Fragment key={index}>
-                                            {isOriginal && ( <p className="text-center text-xs text-warm-gray-700/60 dark:text-slate-500 tracking-wider font-semibold uppercase">{entry.user}</p> )}
-                                            {!isOriginal && (
-                                                <div className="flex justify-end">
-                                                    <p className="bg-gradient-to-br from-amber-600 to-amber-700 text-white text-sm rounded-xl py-2.5 px-4 max-w-sm text-left shadow-lg">{entry.user}</p>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-start">
-                                                <div className="relative group bg-warm-gray-100 dark:bg-warm-gray-800 p-2.5 rounded-xl border border-warm-gray-200 dark:border-warm-gray-700/50">
-                                                    <img src={entry.image} alt={altText} className="max-h-36 rounded-lg object-contain" />
-                                                    <div className="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                                        <button onClick={() => downloadImage(entry.image, filename)} className="bg-black/60 text-white p-1.5 rounded-full" aria-label={`Download ${altText}`} title="Download this version" >
-                                                            <DownloadIcon className="h-4 w-4"/>
-                                                        </button>
-                                                        {index < editHistory.length - 1 && (
-                                                            <button onClick={() => handleRevertToVersion(index)} className="bg-black/60 text-white p-1.5 rounded-full" aria-label={`Use this version and continue editing from here`} title="Use this version" >
-                                                                <RevertIcon className="h-4 w-4"/>
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </React.Fragment>
-                                    )
-                                })}
-                                <div ref={chatEndRef} />
-                            </div>
-                            <div className="relative mt-auto">
-                                <TextareaField value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), status !== 'loading' && handleEditSubmit())} placeholder="e.g., Change the color to blue..." className="py-3.5 pl-4 pr-14 disabled:opacity-60 resize-none" rows={1} disabled={status === 'loading'} />
-                                <button onClick={handleEditSubmit} disabled={status === 'loading' || !prompt} className="absolute inset-y-0 right-0 flex items-center pr-4 disabled:opacity-50 text-amber-600 hover:text-amber-500 transition-colors duration-300"> <SendIcon className="h-6 w-6"/> </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
         </div>
 
-        {/* --- OUTPUT PANEL --- */}
-        <div className="bg-white/60 dark:bg-warm-gray-900/60 backdrop-blur-xl rounded-3xl border border-warm-gray-200 dark:border-warm-gray-700/80 p-8 flex flex-col items-center justify-center min-h-[600px] space-y-4">
-            {status === 'loading' && <PulsingSparklesLoader text={brandKit ? "Building Brand Kit..." : "Generating Logo..."} />}
-            {status === 'error' && error && (
-                <div className="text-center text-red-500 dark:text-red-400 space-y-6 bg-red-500/10 dark:bg-red-900/20 p-8 rounded-2xl border border-red-500/20 dark:border-red-500/30 animate-fadeInUp">
-                    <div><p className="font-semibold text-lg text-red-700 dark:text-red-300">Generation Failed</p><p className="text-sm mt-2 max-w-sm">{error}</p></div>
-                    <button onClick={handleReset} className="inline-flex items-center gap-2 rounded-md bg-warm-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-warm-gray-800 transition-colors duration-300"><RefreshIcon className="h-5 w-5" />Start Over</button>
-                </div>
-            )}
-            {status !== 'loading' && !generatedImage && (
-                <div className="text-center text-warm-gray-700/60 dark:text-slate-500 space-y-3">
-                    <SparklesIcon className="h-20 w-20 mx-auto text-warm-gray-300/80 dark:text-warm-gray-600/70"/>
-                    <h3 className="text-xl font-semibold text-charcoal-800 dark:text-slate-300">Your brand identity awaits</h3>
-                    <p className="mt-1 text-base">Use the intelligent brief to get started.</p>
-                </div>
-            )}
-            {generatedImage && (
-                <div className="w-full h-full text-center space-y-6 overflow-y-auto pr-2 -mr-4 animate-fadeInUp">
-                    <div className="relative group inline-block ai-reveal">
-                        <img src={generatedImage} alt="Generated logo" className="max-h-64 mx-auto rounded-lg object-contain bg-warm-gray-100 dark:bg-warm-gray-800/30 p-2" />
-                        <button onClick={() => downloadImage(generatedImage, 'logo.png')} className="absolute top-2 right-2 bg-black/60 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-label="Download logo">
-                            <DownloadIcon className="h-5 w-5"/>
-                        </button>
-                    </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+            
+            {/* LEFT COLUMN: INPUTS */}
+            <div className="space-y-8 animate-fadeInUp">
+                <div className="bg-white dark:bg-warm-gray-900 p-6 rounded-2xl shadow-xl shadow-warm-gray-200/50 dark:shadow-none border border-warm-gray-100 dark:border-warm-gray-800">
+                    
+                    <h2 className="text-2xl font-bold mb-6 text-warm-gray-900 dark:text-white flex items-center gap-2">
+                        <SparklesIcon className="w-6 h-6 text-amber-500" />
+                        {mode === 'create' ? 'Define tu Marca' : 'Transforma tu Logo'}
+                    </h2>
 
-                    {(activeMode === 'create' || isEditLogoFinalized) ? (
-                        <>
-                            <div className="w-full pt-4 space-y-4">
-                                <div className="flex justify-center flex-wrap gap-3">
-                                    {logoVariations.transparent_bg?.status !== 'success' && (
-                                        <button onClick={() => handleGenerateLogoVariation('transparent_bg')} disabled={logoVariations.transparent_bg?.status === 'loading'} title={logoVariations.transparent_bg?.error} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
-                                            <WandIcon className="h-5 w-5" />
-                                            {logoVariations.transparent_bg?.status === 'loading' ? 'Processing...' : logoVariations.transparent_bg?.status === 'error' ? 'Retry' : 'Remove Background'}
+                    {mode === 'create' ? (
+                        <div className="space-y-5">
+                            <div>
+                                <label className="block text-sm font-medium text-warm-gray-700 dark:text-warm-gray-300 mb-1">Nombre de la Marca</label>
+                                <input 
+                                    type="text" 
+                                    value={brandName}
+                                    onChange={(e) => setBrandName(e.target.value)}
+                                    placeholder="Ej. Lumina, Café del Sol..."
+                                    className="w-full px-4 py-3 rounded-xl bg-warm-gray-50 dark:bg-warm-gray-950 border border-warm-gray-200 dark:border-warm-gray-800 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-warm-gray-700 dark:text-warm-gray-300 mb-1">Descripción o Industria</label>
+                                <textarea 
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Ej. Una cafetería moderna y ecológica en la ciudad..."
+                                    rows={3}
+                                    className="w-full px-4 py-3 rounded-xl bg-warm-gray-50 dark:bg-warm-gray-950 border border-warm-gray-200 dark:border-warm-gray-800 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all resize-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-warm-gray-700 dark:text-warm-gray-300 mb-3">Estilo Visual</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {STYLES.map(s => (
+                                        <button
+                                            key={s}
+                                            onClick={() => setSelectedStyle(s)}
+                                            className={`px-4 py-2 rounded-full text-xs font-medium transition-all border ${selectedStyle === s ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-500 text-amber-700 dark:text-amber-400' : 'bg-transparent border-warm-gray-200 dark:border-warm-gray-700 text-warm-gray-600 dark:text-warm-gray-400 hover:border-amber-500/50'}`}
+                                        >
+                                            {s}
                                         </button>
-                                    )}
-                                    {logoVariations.profile_picture?.status !== 'success' && (
-                                        <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} title={logoVariations.profile_picture?.error} className="inline-flex items-center gap-2 rounded-lg bg-warm-gray-200 dark:bg-warm-gray-700 px-4 py-2.5 text-sm font-semibold text-charcoal-800 dark:text-white hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 disabled:text-warm-gray-700/50 dark:disabled:text-slate-500 transition-all duration-300 active:scale-95">
-                                            <WandIcon className="h-5 w-5" />
-                                            {logoVariations.profile_picture?.status === 'loading' ? 'Creating...' : logoVariations.profile_picture?.status === 'error' ? 'Retry' : 'Create Profile Picture'}
-                                        </button>
-                                    )}
+                                    ))}
                                 </div>
-
-                                {(logoVariations.transparent_bg?.url || logoVariations.profile_picture?.url) && (
-                                    <div className="flex justify-center items-start flex-wrap gap-6 pt-4">
-                                        {logoVariations.transparent_bg?.url && (
-                                            <div className="flex flex-col items-center animate-fadeInUp">
-                                                <p className="text-sm font-medium text-charcoal-800 dark:text-slate-300 mb-2">Transparent Background</p>
-                                                <div className="relative group">
-                                                    <div className={`h-28 w-28 rounded-lg p-1.5 flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700 ${theme === 'light' ? 'checkerboard-light' : 'checkerboard-dark'}`}>
-                                                        <img src={logoVariations.transparent_bg.url} alt="Transparent background logo variation" className="h-full w-full object-contain"/>
-                                                    </div>
-                                                    <button onClick={() => downloadImage(logoVariations.transparent_bg.url!, 'logo_transparent_bg.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download transparent background logo">
-                                                        <DownloadIcon className="h-4 w-4"/>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {logoVariations.profile_picture?.url && (
-                                            <div className="flex flex-col items-center animate-fadeInUp">
-                                                <p className="text-sm font-medium text-charcoal-800 dark:text-slate-300 mb-2">Profile Picture</p>
-                                                <div className="relative group">
-                                                    <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-28 w-28 object-cover rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-700"/>
-                                                    <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
-                                                        <DownloadIcon className="h-4 w-4"/>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
+                            </div>
+                        </div>
+                    ) : (
+                        /* EDIT MODE INPUTS */
+                        <div className="space-y-5">
+                             <div className="border-2 border-dashed border-warm-gray-300 dark:border-warm-gray-700 rounded-xl p-8 text-center hover:bg-warm-gray-50 dark:hover:bg-warm-gray-800/50 transition-colors cursor-pointer relative group">
+                                <input 
+                                    type="file" 
+                                    accept="image/*"
+                                    onChange={handleFileUpload}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                />
+                                {uploadedImage ? (
+                                    <div className="relative w-full aspect-video flex items-center justify-center overflow-hidden rounded-lg bg-checkerboard-light dark:bg-checkerboard-dark">
+                                        <img src={uploadedImage} alt="Uploaded" className="max-h-full max-w-full object-contain" />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span className="text-white font-medium">Cambiar imagen</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-4">
+                                        <UploadIcon className="w-10 h-10 text-warm-gray-400 mb-3" />
+                                        <p className="text-sm text-warm-gray-600 dark:text-warm-gray-300 font-medium">Sube tu logo actual</p>
+                                        <p className="text-xs text-warm-gray-400 mt-1">PNG, JPG hasta 5MB</p>
                                     </div>
                                 )}
                             </div>
-                            
-                            {!brandKit && (
+
+                            {uploadedImage && (
                                 <>
-                                <div className="w-full border-t border-warm-gray-200 dark:border-warm-gray-700/80 my-4"></div>
-                                <button onClick={handleGenerateInitialBrandKit} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 active:scale-95"><WandIcon className="h-5 w-5" />Build Brand Kit</button>
-                                </>
-                            )}
-                            
-                            {brandKit && (
-                                <div className={`text-left bg-warm-gray-100/50 dark:bg-warm-gray-950/40 p-6 rounded-2xl border border-warm-gray-200 dark:border-warm-gray-700/50 space-y-8 transition-opacity duration-700 ${showBrandKit ? 'opacity-100' : 'opacity-0'}`}>
-                                    {/* Downloads */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Download Assets</h3>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                            <button onClick={() => downloadImage(generatedImage, 'logo_color.png')} className="text-sm font-semibold bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 p-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors duration-300 active:scale-95"><DownloadIcon className="h-4 w-4" />Color Logo</button>
-                                            <button onClick={() => handleGenerateLogoVariation('white')} disabled={logoVariations.white?.status === 'loading'} title={logoVariations.white?.error} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.white?.status === 'loading' ? 'Generating...' : logoVariations.white?.status === 'error' ? 'Retry' : 'White Logo'}</button>
-                                            <button onClick={() => handleGenerateLogoVariation('profile_picture')} disabled={logoVariations.profile_picture?.status === 'loading'} title={logoVariations.profile_picture?.error} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 p-2.5 rounded-lg disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{logoVariations.profile_picture?.status === 'loading' ? 'Generating...' : logoVariations.profile_picture?.status === 'error' ? 'Retry' : 'Profile Picture'}</button>
-                                        </div>
-                                        <div className="flex items-start gap-4 mt-3">
-                                            {logoVariations.white?.url && (
-                                                <div className="relative group animate-fadeInUp">
-                                                    <img src={logoVariations.white.url} alt="White logo variation" className="h-20 w-20 object-contain rounded-lg bg-warm-gray-800 p-1.5 border border-warm-gray-700"/>
-                                                    <button onClick={() => downloadImage(logoVariations.white.url!, 'logo_white.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download white logo">
-                                                        <DownloadIcon className="h-4 w-4"/>
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {logoVariations.profile_picture?.url && (
-                                                <div className="relative group animate-fadeInUp">
-                                                    <img src={logoVariations.profile_picture.url} alt="Profile picture variation" className="h-20 w-20 object-cover rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-700"/>
-                                                    <button onClick={() => downloadImage(logoVariations.profile_picture.url!, 'logo_profile_picture.png')} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download profile picture">
-                                                        <DownloadIcon className="h-4 w-4"/>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {/* Palette & Typography */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Core Identity</h3>
-                                        <div className="flex gap-4 mb-3">{brandKit.colors.map((c, i) => <div key={i} className="flex flex-col items-center gap-2"><div className="w-12 h-12 rounded-full border-2 border-warm-gray-300 dark:border-warm-gray-600 shadow-md transition-transform hover:scale-110" style={{backgroundColor: c.hex}} title={c.hex}></div><p className="text-xs text-warm-gray-700/80 dark:text-slate-400 font-mono">{c.hex.toUpperCase()}</p></div>)}</div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-4 rounded-lg">
-                                            <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Heading</p><p className="text-2xl text-charcoal-900 dark:text-white font-semibold mt-1" style={{fontFamily: `'${brandKit.typography.headingFont}', sans-serif`}}>{brandKit.typography.headingFont}</p></div>
-                                            <div><p className="text-warm-gray-700/80 dark:text-slate-400 text-xs uppercase tracking-wider">Body</p><p className="text-lg text-charcoal-900 dark:text-white mt-2" style={{fontFamily: `'${brandKit.typography.bodyFont}', sans-serif`}}>{brandKit.typography.bodyFont}</p></div>
-                                        </div>
-                                    </div>
-                                    {/* Personalization Section */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Personalize Mockups</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <InputField type="text" placeholder="Full Name" value={mockupName} onChange={(e) => setMockupName(e.target.value)} />
-                                            <InputField type="text" placeholder="Title / Role" value={mockupTitle} onChange={(e) => setMockupTitle(e.target.value)} />
-                                            <InputField type="text" placeholder="Phone Number" value={mockupPhone} onChange={(e) => setMockupPhone(e.target.value)} />
-                                            <InputField type="email" placeholder="Email Address" value={mockupEmail} onChange={(e) => setMockupEmail(e.target.value)} />
-                                            <div className="md:col-span-2">
-                                                <InputField type="text" placeholder="Website URL" value={mockupWebsite} onChange={(e) => setMockupWebsite(e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
-                                            <p className="text-xs text-warm-gray-700/80 dark:text-slate-400 flex-grow">This information will be used for relevant mockups like business cards and letterheads.</p>
-                                            <button 
-                                                onClick={handleUpdatePersonalizedMockups}
-                                                disabled={!hasGeneratedPersonalizableMockup || isUpdatingPersonalizedMockups}
-                                                className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-200/70 dark:bg-amber-800/70 hover:bg-amber-300/70 dark:hover:bg-amber-700/70 text-amber-800 dark:text-amber-200 px-4 py-2.5 text-sm font-semibold transition-all duration-300 active:scale-95 disabled:bg-warm-gray-200 dark:disabled:bg-warm-gray-700/50 disabled:text-warm-gray-700/60 dark:disabled:text-slate-500 disabled:cursor-not-allowed disabled:scale-100"
-                                            >
-                                                <RefreshIcon className={`h-4 w-4 ${isUpdatingPersonalizedMockups ? 'animate-spin' : ''}`} />
-                                                {isUpdatingPersonalizedMockups ? 'Updating...' : 'Update Mockups'}
-                                            </button>
-                                        </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-warm-gray-700 dark:text-warm-gray-300 mb-1">
+                                            Nuevo Texto / Nombre <span className="text-xs text-amber-600 ml-1">(Opcional)</span>
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            value={editName}
+                                            onChange={(e) => setEditName(e.target.value)}
+                                            placeholder='Ej. Cambiar nombre a "M"'
+                                            className="w-full px-4 py-3 rounded-xl bg-warm-gray-50 dark:bg-warm-gray-950 border border-warm-gray-200 dark:border-warm-gray-800 focus:ring-2 focus:ring-amber-500 outline-none"
+                                        />
+                                        <p className="text-xs text-warm-gray-500 mt-1">Deja en blanco para mantener el texto original.</p>
                                     </div>
 
-                                    {/* Mockups */}
-                                    <div className="space-y-4">
-                                        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Mockups</h3>
-                                        <div className="flex flex-wrap gap-2 mb-3">{MOCKUP_TYPES.map(type => <button key={type} onClick={() => handleGenerateMockup(type)} disabled={generatedMockups[type]?.status === 'loading'} className="text-xs font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-3 py-1.5 rounded-full disabled:bg-warm-gray-100 dark:disabled:bg-warm-gray-800 transition-colors duration-300 active:scale-95">{generatedMockups[type]?.status === 'loading' ? 'Generating...' : type}</button>)}</div>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                            {Object.entries(generatedMockups).map(([key, mockup]: [string, MockupState]) => (
-                                                <div key={key} className="relative group aspect-video bg-warm-gray-200 dark:bg-warm-gray-800 rounded-lg flex items-center justify-center border border-warm-gray-300 dark:border-warm-gray-700/50" title={mockup.error}>
-                                                    {mockup.status === 'loading' && <div className="w-full h-full bg-warm-gray-300/50 dark:bg-warm-gray-700/50 rounded-lg animate-pulse"></div>}
-                                                    {mockup.status === 'error' && (
-                                                        <div className="text-center p-2">
-                                                            <p className="text-xs text-red-500 dark:text-red-400 font-semibold">Failed</p>
-                                                            <button onClick={() => handleGenerateMockup(key)} className="mt-1 text-xs bg-red-500/20 dark:bg-red-800/70 hover:bg-red-500/30 dark:hover:bg-red-700/70 p-1.5 rounded-md transition-colors duration-300">Retry</button>
-                                                        </div>
-                                                    )}
-                                                    {mockup.status === 'success' && mockup.url && (
-                                                        <>
-                                                            <img src={mockup.url} alt={`${key} Mockup`} className="rounded-lg object-cover w-full h-full"/>
-                                                            <button onClick={() => downloadImage(mockup.url!, `mockup_${key.toLowerCase().replace(/ /g, '_')}.png`)} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Download ${key} mockup`}>
-                                                                <DownloadIcon className="h-4 w-4"/>
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-warm-gray-700 dark:text-warm-gray-300 mb-3">Estilo Recomendado</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {EDIT_STYLES.map(s => (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => setEditStyle(s)}
+                                                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${editStyle === s ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-500 text-amber-700 dark:text-amber-400' : 'bg-transparent border-warm-gray-200 dark:border-warm-gray-700 text-warm-gray-600 dark:text-warm-gray-400 hover:border-amber-500/50'}`}
+                                                >
+                                                    {s}
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
-                                    {/* Social Post & Guidelines */}
-                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                                        <div className="space-y-4">
-                                            <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Social Media</h3>
-                                            {!socialPost && <button onClick={handleGenerateSocialPost} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Launch Post</button>}
-                                            {socialPost?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating post...</p>}
-                                            {socialPost?.status === 'error' && (
-                                                <div className="text-sm text-red-600 dark:text-red-400 p-3 bg-red-500/10 rounded-lg space-y-2">
-                                                    <p className="font-semibold">Generation Failed</p>
-                                                    <p className="text-xs">{socialPost.error}</p>
-                                                    <button onClick={handleGenerateSocialPost} className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded">Retry</button>
-                                                </div>
-                                            )}
-                                            {socialPost?.status === 'success' && socialPost.image && (
-                                                <div className="flex gap-4 items-start animate-fadeInUp">
-                                                    <div className="relative group w-1/3 flex-shrink-0">
-                                                        <img src={socialPost.image} alt="Social media post" className="rounded-lg aspect-square object-cover"/>
-                                                        <button onClick={() => downloadImage(socialPost.image, 'social_post_image.png')} className="absolute top-1.5 right-1.5 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Download social post image">
-                                                            <DownloadIcon className="h-4 w-4"/>
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-sm text-charcoal-800 dark:text-slate-300 p-3 bg-warm-gray-200/80 dark:bg-warm-gray-800/80 rounded-lg ">{socialPost.caption}</p>
-                                                </div>
-                                            )}
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-warm-gray-700 dark:text-warm-gray-300 mb-1">Instrucciones Adicionales</label>
+                                        <textarea 
+                                            value={editInstructions}
+                                            onChange={(e) => setEditInstructions(e.target.value)}
+                                            placeholder="Ej. Hazlo más minimalista, cambia el azul por rojo..."
+                                            rows={2}
+                                            className="w-full px-4 py-3 rounded-xl bg-warm-gray-50 dark:bg-warm-gray-950 border border-warm-gray-200 dark:border-warm-gray-800 focus:ring-2 focus:ring-amber-500 outline-none resize-none"
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="mt-8">
+                        <button 
+                            onClick={handleGenerate}
+                            disabled={status === 'loading' || (mode === 'edit' && !uploadedImage)}
+                            className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-amber-500/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex justify-center items-center gap-2
+                            ${status === 'loading' ? 'bg-warm-gray-400 cursor-wait' : 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700'}`}
+                        >
+                            {status === 'loading' ? (
+                                <>
+                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Generando...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <SparklesIcon className="w-5 h-5" />
+                                    Generar Marca
+                                </>
+                            )}
+                        </button>
+                        {status === 'loading' && <p className="text-center text-xs text-warm-gray-500 mt-3 animate-pulse">{loadingMessage}</p>}
+                        {error && <p className="text-center text-sm text-red-500 mt-3">{error}</p>}
+                    </div>
+                </div>
+            </div>
+
+            {/* RIGHT COLUMN: RESULTS */}
+            <div className="space-y-8">
+                {status === 'idle' && !generatedImage && (
+                     <div className="h-full min-h-[400px] border-2 border-dashed border-warm-gray-200 dark:border-warm-gray-800 rounded-2xl flex flex-col items-center justify-center text-warm-gray-400 p-12 text-center">
+                        <div className="w-20 h-20 bg-warm-gray-100 dark:bg-warm-gray-900 rounded-full flex items-center justify-center mb-4">
+                            <SparklesIcon className="w-10 h-10 opacity-20" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-warm-gray-500 dark:text-warm-gray-400">Tu identidad visual aparecerá aquí</h3>
+                        <p className="text-sm max-w-xs mt-2">Completa el formulario a la izquierda y deja que la IA haga su magia.</p>
+                     </div>
+                )}
+
+                {generatedImage && (
+                    <div className="animate-fadeInUp space-y-8">
+                        
+                        {/* MAIN LOGO CARD */}
+                        <div className="bg-white dark:bg-warm-gray-900 rounded-2xl shadow-2xl shadow-black/10 overflow-hidden border border-warm-gray-100 dark:border-warm-gray-800">
+                             <div className="aspect-square w-full relative bg-checkerboard-light dark:bg-checkerboard-dark flex items-center justify-center p-8 ai-reveal">
+                                <img src={generatedImage} alt="Generated Logo" className="max-w-full max-h-full object-contain drop-shadow-xl" />
+                                <a 
+                                    href={generatedImage} 
+                                    download="mi-marca-logo.png"
+                                    className="absolute bottom-4 right-4 p-3 bg-white dark:bg-warm-gray-800 text-warm-gray-900 dark:text-white rounded-full shadow-lg hover:bg-warm-gray-50 dark:hover:bg-warm-gray-700 transition-all"
+                                    title="Descargar"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                </a>
+                             </div>
+                             <div className="p-6 border-t border-warm-gray-100 dark:border-warm-gray-800">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-warm-gray-900 dark:text-white">{brandName || "Tu Marca"}</h3>
+                                        <p className="text-sm text-warm-gray-500 dark:text-warm-gray-400">Concepto Generado</p>
+                                    </div>
+                                    {/* Slogans Chips */}
+                                    {slogans.length > 0 && (
+                                        <div className="text-right hidden sm:block">
+                                            <p className="text-xs text-amber-600 font-medium italic">"{slogans[0]}"</p>
                                         </div>
-                                        <div className="space-y-4">
-                                            <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-500 tracking-wide">Brand Guidelines</h3>
-                                            {!brandGuidelines && <button onClick={handleGenerateGuidelines} className="text-sm font-semibold bg-warm-gray-200 dark:bg-warm-gray-700 hover:bg-warm-gray-300 dark:hover:bg-warm-gray-600 px-4 py-2 rounded-lg transition-colors duration-300 active:scale-95">Generate Guidelines</button>}
-                                            {brandGuidelines?.status === 'loading' && <p className="text-sm text-warm-gray-700/80 dark:text-slate-400">Generating guidelines...</p>}
-                                            {brandGuidelines?.status === 'error' && (
-                                                <div className="text-sm text-red-600 dark:text-red-400 p-3 bg-red-500/10 rounded-lg space-y-2">
-                                                    <p className="font-semibold">Generation Failed</p>
-                                                    <p className="text-xs">{brandGuidelines.error}</p>
-                                                    <button onClick={handleGenerateGuidelines} className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2 py-1 rounded">Retry</button>
-                                                </div>
-                                            )}
-                                            {brandGuidelines?.status === 'success' && brandGuidelines.logoPhilosophy && (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-warm-gray-200/50 dark:bg-warm-gray-800/50 p-6 rounded-lg animate-fadeInUp">
-                                                    <div className="sm:col-span-2">
-                                                      <GuidelineItem icon={<InfoIcon className="h-6 w-6"/>} title="Logo Philosophy">
-                                                          <p>{brandGuidelines.logoPhilosophy}</p>
-                                                      </GuidelineItem>
-                                                    </div>
-                                                    
-                                                    <GuidelineItem icon={<ClearSpaceIcon className="h-6 w-6"/>} title="Clear Space">
-                                                        <p>{brandGuidelines.clearSpaceRule}</p>
-                                                    </GuidelineItem>
-                                                    
-                                                    <GuidelineItem icon={<RulerIcon className="h-6 w-6"/>} title="Minimum Size">
-                                                        <p>{brandGuidelines.minimumSize}</p>
-                                                    </GuidelineItem>
+                                    )}
+                                </div>
 
-                                                    <div className="sm:col-span-2">
-                                                      <GuidelineItem icon={<TagsIcon className="h-6 w-6"/>} title="Tone of Voice">
-                                                          <div className="flex flex-wrap gap-2">
-                                                              {brandGuidelines.toneOfVoice?.map((tag, i) => (
-                                                                  <span key={i} className="text-xs font-medium bg-amber-200/60 dark:bg-amber-800/60 text-amber-800 dark:text-amber-200 px-2.5 py-1 rounded-full">{tag}</span>
-                                                              ))}
-                                                          </div>
-                                                      </GuidelineItem>
-                                                    </div>
+                                {/* ACTIONS GRID */}
+                                <div className="grid grid-cols-3 gap-3 mt-6">
+                                    <button onClick={() => handleCreateMockup('t-shirt')} className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-gray-50 dark:bg-warm-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors group">
+                                        <SwatchIcon className="w-6 h-6 text-warm-gray-600 dark:text-warm-gray-400 group-hover:text-amber-500 mb-1" />
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-warm-gray-500 group-hover:text-amber-600">Mockups</span>
+                                    </button>
+                                    <button onClick={handleSocialPost} className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-gray-50 dark:bg-warm-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors group">
+                                        <ShareIcon className="w-6 h-6 text-warm-gray-600 dark:text-warm-gray-400 group-hover:text-amber-500 mb-1" />
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-warm-gray-500 group-hover:text-amber-600">Social</span>
+                                    </button>
+                                    <button onClick={handleGuidelines} className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-gray-50 dark:bg-warm-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors group">
+                                        <DocumentTextIcon className="w-6 h-6 text-warm-gray-600 dark:text-warm-gray-400 group-hover:text-amber-500 mb-1" />
+                                        <span className="text-[10px] font-medium uppercase tracking-wide text-warm-gray-500 group-hover:text-amber-600">Guía</span>
+                                    </button>
+                                </div>
+                             </div>
+                        </div>
 
-                                                    <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/10 border border-green-500/20 dark:border-green-500/20">
-                                                        <h4 className="font-semibold text-green-600/90 dark:text-green-400/90 mb-2 flex items-center gap-2"><ThumbsUpIcon className="h-5 w-5" />Best Practices</h4>
-                                                        <ul className="list-disc list-inside space-y-1 text-sm text-charcoal-800 dark:text-slate-300">{brandGuidelines.colorUsage?.map((item, i) => <li key={i}>{item}</li>)}</ul>
-                                                    </div>
-
-                                                    <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/10 border border-red-500/20 dark:border-red-500/20">
-                                                        <h4 className="font-semibold text-red-600/80 dark:text-red-400/80 mb-2 flex items-center gap-2"><ThumbsDownIcon className="h-5 w-5" />Common Misuses</h4>
-                                                        <ul className="list-disc list-inside space-y-1 text-sm text-charcoal-800 dark:text-slate-300">{brandGuidelines.logoMisuse?.map((item, i) => <li key={i}>{item}</li>)}</ul>
-                                                    </div>
-                                                </div>
-                                            )}
+                        {/* BRAND KIT SECTION */}
+                        {brandKit && (
+                            <div className="bg-white dark:bg-warm-gray-900 p-6 rounded-2xl shadow-xl border border-warm-gray-100 dark:border-warm-gray-800">
+                                <h4 className="text-sm font-bold uppercase tracking-wider text-warm-gray-400 mb-4 flex items-center gap-2">
+                                    <SwatchIcon className="w-4 h-4" /> Paleta & Tipografía
+                                </h4>
+                                
+                                <div className="space-y-6">
+                                    {/* Colors */}
+                                    <div className="flex rounded-xl overflow-hidden shadow-sm h-16">
+                                        {brandKit.colors.map((color, idx) => (
+                                            <div key={idx} className="flex-1 group relative flex items-end justify-center pb-2" style={{ backgroundColor: color.hex }}>
+                                                <span className="bg-black/50 text-white text-[10px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">{color.hex}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    {/* Typography */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-4 bg-warm-gray-50 dark:bg-warm-gray-800 rounded-xl">
+                                            <p className="text-xs text-warm-gray-500 mb-1">Encabezados</p>
+                                            <p className="text-lg font-bold text-warm-gray-900 dark:text-white" style={{ fontFamily: brandKit.typography.headingFont + ', sans-serif' }}>
+                                                {brandKit.typography.headingFont}
+                                            </p>
+                                            <p className="text-xs text-warm-gray-400 truncate">Aa Bb Cc 123</p>
+                                        </div>
+                                        <div className="p-4 bg-warm-gray-50 dark:bg-warm-gray-800 rounded-xl">
+                                            <p className="text-xs text-warm-gray-500 mb-1">Cuerpo</p>
+                                            <p className="text-lg text-warm-gray-900 dark:text-white" style={{ fontFamily: brandKit.typography.bodyFont + ', sans-serif' }}>
+                                                {brandKit.typography.bodyFont}
+                                            </p>
+                                            <p className="text-xs text-warm-gray-400 truncate">El veloz murciélago hindú...</p>
                                         </div>
                                     </div>
                                 </div>
-                            )}
-                        </>
-                    ) : (
-                        <div className="w-full pt-6 text-center animate-fadeInUp">
-                            <p className="mb-4 text-sm text-warm-gray-700 dark:text-slate-400">Iterate on your logo using the chat on the left.<br/>When you're happy with the result, continue to the brand kit.</p>
-                            <button onClick={handleFinalizeLogo} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-amber-500/30 hover:from-amber-600 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 active:scale-95">
-                                <CheckIcon className="h-5 w-5" />
-                                Finalize Logo & Build Brand Kit
-                            </button>
-                        </div>
-                    )}
-                </div>
-             )}
-        </div>
-      </main>
-      
-      {/* --- SLOGAN SUGGESTIONS MODAL --- */}
-      {isSloganModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setIsSloganModalOpen(false)}>
-            <div className="bg-warm-gray-100 dark:bg-warm-gray-900 border border-warm-gray-200 dark:border-warm-gray-700 rounded-2xl p-6 w-full max-w-lg space-y-4 shadow-2xl shadow-amber-900/20 dark:shadow-amber-900/40 animate-fadeInUp" onClick={e => e.stopPropagation()}>
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-semibold text-amber-700 dark:text-amber-500">Slogan Suggestions</h2>
-                    <button onClick={() => setIsSloganModalOpen(false)} className="text-warm-gray-700/80 dark:text-slate-400 hover:text-charcoal-900 dark:hover:text-white transition-colors duration-300"><XIcon className="h-6 w-6"/></button>
-                </div>
+                            </div>
+                        )}
 
-                {sloganGenerationStatus === 'loading' && (
-                    <div className="flex flex-col items-center justify-center p-8 space-y-3">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
-                        <p className="text-sm text-warm-gray-800 dark:text-slate-300">Generating ideas...</p>
-                    </div>
-                )}
-                
-                {sloganGenerationStatus === 'error' && (
-                     <div className="text-center text-red-500 dark:text-red-400 p-6 bg-red-500/10 dark:bg-red-900/20 rounded-lg border border-red-500/20 dark:border-red-500/30">
-                        <p className="font-semibold text-red-700 dark:text-red-300">Generation Failed</p>
-                        <p className="text-sm mt-1">{sloganGenerationError}</p>
+                        {/* MOCKUPS SECTION */}
+                        {Object.keys(mockups).length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {Object.entries(mockups).map(([key, url]) => (
+                                    <div key={key} className="relative rounded-xl overflow-hidden shadow-lg group">
+                                        <img src={url} alt={key} className="w-full h-48 object-cover" />
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                                            <p className="text-white text-sm font-medium capitalize">{key}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
-                        <button onClick={handleOpenSloganModal} className="mt-4 inline-flex items-center gap-2 rounded-md bg-warm-gray-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-warm-gray-800 transition-colors duration-300"><RefreshIcon className="h-4 w-4" />Retry</button>
-                    </div>
-                )}
+                        {/* SOCIAL POST PREVIEW */}
+                        {socialPost && (
+                            <div className="bg-white dark:bg-warm-gray-900 rounded-xl shadow-lg overflow-hidden border border-warm-gray-100 dark:border-warm-gray-800">
+                                <div className="p-3 flex items-center gap-3 border-b border-warm-gray-100 dark:border-warm-gray-800">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-purple-600 p-[2px]">
+                                        <div className="w-full h-full rounded-full bg-white dark:bg-warm-gray-900 flex items-center justify-center overflow-hidden">
+                                            <img src={generatedImage} className="w-full h-full object-cover" alt="Avatar" />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs font-bold text-warm-gray-900 dark:text-white">{brandName || "tu_marca_oficial"}</p>
+                                </div>
+                                {socialPost.image ? (
+                                    <img src={socialPost.image} alt="Social Post" className="w-full aspect-square object-cover" />
+                                ) : (
+                                    <div className="w-full aspect-square bg-warm-gray-100 flex items-center justify-center text-warm-gray-400">Cargando imagen...</div>
+                                )}
+                                <div className="p-4">
+                                    <p className="text-sm text-warm-gray-800 dark:text-warm-gray-200">
+                                        <span className="font-bold mr-2">{brandName || "tu_marca"}</span>
+                                        {socialPost.caption}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
-                {sloganGenerationStatus === 'success' && (
-                    <div className="space-y-3">
-                        {sloganSuggestions.map((slogan, index) => (
-                             <button 
-                                key={index} 
-                                onClick={() => handleSelectSlogan(slogan)}
-                                className="w-full text-left p-4 rounded-lg bg-white/70 dark:bg-warm-gray-800/70 hover:bg-warm-gray-200/80 dark:hover:bg-warm-gray-700/50 border border-warm-gray-300 dark:border-warm-gray-700 hover:border-amber-500 dark:hover:border-amber-500 transition-all duration-300 text-charcoal-800 dark:text-slate-200"
-                            >
-                                {slogan}
-                            </button>
-                        ))}
+                        {/* GUIDELINES SECTION */}
+                        {guidelines && (
+                            <div className="bg-white dark:bg-warm-gray-900 p-6 rounded-2xl shadow-xl border border-warm-gray-100 dark:border-warm-gray-800 animate-fadeInUp">
+                                <h3 className="font-bold text-lg mb-4 text-warm-gray-900 dark:text-white">Manual de Identidad</h3>
+                                <div className="space-y-4 text-sm text-warm-gray-600 dark:text-warm-gray-300">
+                                    <div>
+                                        <h5 className="font-bold text-amber-600">Filosofía</h5>
+                                        <p>{guidelines.logoPhilosophy}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-warm-gray-50 dark:bg-warm-gray-800 p-3 rounded-lg">
+                                            <h5 className="font-bold text-warm-gray-900 dark:text-white mb-1">Espacio Seguro</h5>
+                                            <p className="text-xs">{guidelines.clearSpaceRule}</p>
+                                        </div>
+                                        <div className="bg-warm-gray-50 dark:bg-warm-gray-800 p-3 rounded-lg">
+                                            <h5 className="font-bold text-warm-gray-900 dark:text-white mb-1">Tamaño Mínimo</h5>
+                                            <p className="text-xs">{guidelines.minimumSize}</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h5 className="font-bold text-warm-gray-900 dark:text-white mb-1">Lo que NO hacer</h5>
+                                        <ul className="list-disc pl-4 space-y-1 text-xs">
+                                            {guidelines.logoMisuse?.map((rule: string, i: number) => (
+                                                <li key={i} className="text-red-500/80">{rule}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* EXTRA SPACE */}
+                        <div className="h-12"></div>
                     </div>
                 )}
             </div>
         </div>
-      )}
+      </main>
     </div>
   );
-};
-
-export default App;
+}
